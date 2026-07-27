@@ -1,11 +1,16 @@
 import mongoose from "mongoose";
+export const connectDB = async () => {
+  try {
+    console.log("Connecting to:", `${process.env.MONGODB_URI}/SCMSC`);
 
-// Function to connect to the mongodb database
-export const connectDB = async () =>{
-    try {
-        mongoose.connection.on('connected', ()=> console.log('Database Connected'));
-       await mongoose.connect(`${process.env.MONGODB_URI}/SCMSC`) 
-    } catch (error) {
-        console.log(error);
-    }
-}
+    mongoose.connection.on("connected", () => {
+      console.log("Database Connected");
+      console.log("Database Name:", mongoose.connection.name);
+      console.log("Host:", mongoose.connection.host);
+    });
+
+    await mongoose.connect(`${process.env.MONGODB_URI}/SCMSC`);
+  } catch (error) {
+    console.log(error);
+  }
+};

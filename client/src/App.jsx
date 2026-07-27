@@ -1,18 +1,66 @@
-import { Routes, Route } from 'react-router-dom'
-import LandingPage from './pages/LandingPage'
-import LoginPage from './pages/LoginPage'
-import ProfilePage from './pages/ProfilePage'
+import { Routes, Route } from "react-router-dom";
 
-const App = () => {
-    return (
-        <div>
-            <Routes>
-                <Route path='/' element={<LandingPage />} />
-                <Route path='/login' element={<LoginPage />} />
-                <Route path='/profile' element={<ProfilePage />} />
-            </Routes>
-        </div>
-    )
+import LandingPage from "./pages/LandingPage";
+import RegisterComplaint from "./pages/RegisterComplaint";
+import TrackComplaint from "./pages/TrackComplaint";
+import LoginPage from "./pages/LoginPage";
+import ProfilePage from "./pages/ProfilePage";
+import AdminDashboard from "./pages/AdminDashboard";
+import VerifyComplaint from "./pages/VerifyComplaint";
+import ServiceConfiguration from "./pages/ServiceConfiguration";
+import ClosedComplaints from "./pages/ClosedComplaints";
+
+function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<LandingPage />} />
+
+      <Route
+        path="/register"
+        element={<RegisterComplaint />}
+      />
+
+      <Route
+        path="/track"
+        element={<TrackComplaint />}
+      />
+
+      <Route
+        path="/login"
+        element={<LoginPage />}
+      />
+
+      <Route
+        path="/profile"
+        element={<ProfilePage />}
+      />
+
+      <Route
+        path="/admin"
+        element={<AdminDashboard />}
+      />
+
+      <Route
+  path="/service-config"
+  element={<ServiceConfiguration />}
+/>
+
+
+
+<Route
+  path="/closed-complaints"
+  element={<ClosedComplaints />}
+/>
+
+
+      <Route
+  path="/verify/:token"
+  element={<VerifyComplaint />}
+/>
+    </Routes>
+    
+  );
 }
 
-export default App
+
+export default App;

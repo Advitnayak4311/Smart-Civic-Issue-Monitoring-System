@@ -1,70 +1,67 @@
-import React, { useState } from 'react';
+import { Link, useLocation } from "react-router-dom";
+import { FaCity } from "react-icons/fa";
 
-const Navbar = () => {
-  const [menuOpen, setMenuOpen] = useState(false);
+export default function Navbar() {
+  const location = useLocation();
 
   return (
-    <div className="text-black w-full">
-      {/* Top Offer Banner */}
-      <div className="text-center font-semibold text-base md:text-lg py-2 bg-gradient-to-r from-sky-300 via-blue-400 to-indigo-500">
-        <p>
-          Exclusive Price Drop! Hurry, <span className="underline underline-offset-2">Offer Ends Soon!</span>
-        </p>
-      </div>
+    <nav className="fixed top-0 left-0 w-full z-50 bg-white/10 backdrop-blur-md border-b border-white/20">
+      <div className="max-w-7xl mx-auto flex justify-between items-center px-8 py-4">
 
-      {/* Main Navbar */}
-      <nav className="relative h-[70px] flex items-center justify-between px-6 md:px-16 lg:px-24 xl:px-32 py-4 bg-transparent text-white transition-all shadow-none">
         {/* Logo */}
-        <a href="/">
-          <svg width="157" height="40" viewBox="0 0 157 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M47.904 28.28..." fill="#fff" />
-            <path d="m8.75 11.3..." stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </a>
-
-        {/* Desktop Nav */}
-        <ul className="hidden md:flex items-center text-lg font-medium space-x-14 md:pl-28">
-          <li><a href="#" className="hover:underline">Home</a></li>
-          <li><a href="#" className="hover:underline">Services</a></li>
-          <li><a href="#" className="hover:underline">Portfolio</a></li>
-          <li><a href="#" className="hover:underline">Pricing</a></li>
-        </ul>
-
-        {/* Desktop Button */}
-        <button className="hidden md:inline border border-white text-white hover:bg-white hover:text-black ml-24 px-12 py-3 text-lg rounded-full active:scale-95 transition-all">
-          Get started
-        </button>
-
-        {/* Mobile Menu Toggle */}
-        <button
-          aria-label="menu-btn"
-          type="button"
-          onClick={() => setMenuOpen(!menuOpen)}
-          className="menu-btn inline-block md:hidden active:scale-90 transition"
+        <Link
+          to="/"
+          className="flex items-center gap-3 text-white font-bold text-3xl"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30" fill="white">
-            <path d="M3 7a1 1 0 1 0 0 2h24a1 1 0 1 0 0-2zm0 7a1 1 0 1 0 0 2h24a1 1 0 1 0 0-2zm0 7a1 1 0 1 0 0 2h24a1 1 0 1 0 0-2z" />
-          </svg>
-        </button>
+          <FaCity className="text-yellow-400 text-4xl" />
+          <span>Smart Civic</span>
+        </Link>
 
-        {/* Mobile Menu */}
-        {menuOpen && (
-          <div className="absolute top-[70px] left-0 w-full bg-black bg-opacity-90 shadow-sm p-6 md:hidden">
-            <ul className="flex flex-col space-y-5 text-lg font-medium">
-              <li><a href="#" className="text-white">Home</a></li>
-              <li><a href="#" className="text-white">Services</a></li>
-              <li><a href="#" className="text-white">Portfolio</a></li>
-              <li><a href="#" className="text-white">Pricing</a></li>
-            </ul>
+        {/* Navigation */}
+        <div className="flex items-center gap-8">
 
-            <button type="button" className="border border-white text-white mt-6 text-lg font-medium hover:bg-white hover:text-black active:scale-95 transition-all w-44 h-12 rounded-full">
-              Get started
-            </button>
-          </div>
-        )}
-      </nav>
-    </div>
+          <Link
+            to="/"
+            className={`transition ${
+              location.pathname === "/"
+                ? "text-yellow-400 font-semibold"
+                : "text-white hover:text-yellow-300"
+            }`}
+          >
+            Home
+          </Link>
+
+          <Link
+            to="/register"
+            className={`transition ${
+              location.pathname === "/register"
+                ? "text-yellow-400 font-semibold"
+                : "text-white hover:text-yellow-300"
+            }`}
+          >
+            Register
+          </Link>
+
+          <Link
+            to="/track"
+            className={`transition ${
+              location.pathname === "/track"
+                ? "text-yellow-400 font-semibold"
+                : "text-white hover:text-yellow-300"
+            }`}
+          >
+            Track
+          </Link>
+
+          <Link
+            to="/login"
+            className="bg-blue-600 hover:bg-blue-700 px-5 py-2 rounded-xl text-white font-semibold transition"
+          >
+            Admin Login
+          </Link>
+
+        </div>
+      </div>
+    </nav>
   );
-};
-
-export default Navbar;
+}
