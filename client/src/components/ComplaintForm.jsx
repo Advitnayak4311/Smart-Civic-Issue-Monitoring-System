@@ -187,6 +187,39 @@ export default function ComplaintForm({ category, issue }) {
     };
   }, []);
 
+  // Client-side Image Compression Helper (Resizes & compresses photo to ~200KB)
+  const compressImage = (dataUrl, maxWidth = 1200, maxHeight = 1200, quality = 0.75) => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxHeight) {
+          if (width / height > maxWidth / maxHeight) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const compressed = canvas.toDataURL("image/jpeg", quality);
+        resolve(compressed);
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+  };
+
   // Handle File Upload from Disk (Multiple Files supported up to 5)
   const handleImage = (e) => {
     const files = Array.from(e.target.files || []);
@@ -199,26 +232,27 @@ export default function ComplaintForm({ category, issue }) {
     }
 
     const filesToProcess = files.slice(0, availableSlots);
-    const allowedTypes = ["image/jpeg", "image/jpg", "image/png"];
-    const maxSize = 5 * 1024 * 1024; // 5MB
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    const maxSize = 20 * 1024 * 1024; // 20MB raw file limit before compression
 
     const newImages = [];
     let count = 0;
 
     filesToProcess.forEach((file) => {
-      if (!allowedTypes.includes(file.type)) {
-        alert(`File ${file.name} is not a valid JPG/PNG image.`);
+      if (!allowedTypes.includes(file.type) && !file.type.startsWith("image/")) {
+        alert(`File ${file.name} is not a valid image format.`);
         return;
       }
 
       if (file.size > maxSize) {
-        alert(`File ${file.name} exceeds maximum 5 MB limit.`);
+        alert(`File ${file.name} exceeds maximum 20 MB limit.`);
         return;
       }
 
       const reader = new FileReader();
-      reader.onloadend = () => {
-        newImages.push(reader.result);
+      reader.onloadend = async () => {
+        const compressed = await compressImage(reader.result);
+        newImages.push(compressed);
         count++;
 
         if (count === filesToProcess.length) {
@@ -227,7 +261,6 @@ export default function ComplaintForm({ category, issue }) {
             return updated;
           });
 
-          // Auto-trigger GPS detection on initial photo upload if location not set
           if (!location.latitude) {
             detectLocation();
           }
@@ -239,7 +272,7 @@ export default function ComplaintForm({ category, issue }) {
     stopCamera();
   };
 
-  // Handle Video Evidence Upload (MP4, WebM, MOV up to 50MB)
+  // Handle Video Evidence Upload (Optimized to stay within Node Buffer limit)
   const handleVideoUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -258,9 +291,9 @@ export default function ComplaintForm({ category, issue }) {
       return;
     }
 
-    const maxVideoSize = 500 * 1024 * 1024; // 500MB limit
+    const maxVideoSize = 12 * 1024 * 1024; // 12MB limit for direct JSON payload
     if (file.size > maxVideoSize) {
-      alert("Video file size exceeds the 500 MB limit.");
+      alert("Video file size exceeds 12 MB. Please select a shorter video clip under 12 MB to ensure fast portal upload.");
       return;
     }
 

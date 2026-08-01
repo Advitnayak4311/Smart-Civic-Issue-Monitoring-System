@@ -14,7 +14,7 @@ import { connectDB } from "./config/db.js";
 
 import userRouter from "./routes/userRoutes.js";
 import complaintRouter from "./routes/complaintRoutes.js";
-import adminRouter from "./routes/adminRoutes.js"; // <-- NEW
+import adminRouter from "./routes/adminRoutes.js";
 import serviceConfigRoutes from "./routes/serviceConfigRoutes.js";
 import departmentRoutes from "./routes/departmentRoutes.js";
 
@@ -22,8 +22,9 @@ const app = express();
 
 const PORT = process.env.PORT || 8000;
 
-app.use(express.json({ limit: "500mb" }));
-app.use(express.urlencoded({ limit: "500mb", extended: true }));
+// Body parser limits set safely under Node's 17.8MB buffer slice threshold
+app.use(express.json({ limit: "15mb" }));
+app.use(express.urlencoded({ limit: "15mb", extended: true }));
 app.use(cookieParser());
 
 app.use(
@@ -42,9 +43,32 @@ app.get("/", (req, res) => {
 
 app.use("/api/auth", userRouter);
 app.use("/api/complaint", complaintRouter);
-app.use("/api/admin", adminRouter); // <-- NEW
+app.use("/api/admin", adminRouter);
 app.use("/api/service-config", serviceConfigRoutes);
 app.use("/api/departments", departmentRoutes);
+
+// Global Error Handler to catch body-parser offset/payload errors gracefully
+app.use((err, req, res, next) => {
+  if (err) {
+    console.error("Express Error Middleware caught:", err.message);
+    if (
+      err.type === "entity.too.large" ||
+      err.message?.includes("offset") ||
+      err.message?.includes("out of range") ||
+      err.code === "ERR_OUT_OF_RANGE"
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Media attachment size is too large. Please attach a smaller image or shorter video clip under 12 MB.",
+      });
+    }
+    return res.status(500).json({
+      success: false,
+      message: err.message || "An internal server error occurred.",
+    });
+  }
+  next();
+});
 
 await connectDB();
 console.log(listEndpoints(app));

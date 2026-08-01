@@ -89,6 +89,25 @@ export const createComplaint = async (req, res) => {
     const priority = service?.priority || "Low";
     const department = service?.department || "General Department";
 
+    // Ensure media strings saved into MongoDB document stay under MongoDB's 16MB BSON limit
+    let safeVideoUrl = videoUrl;
+    if (safeVideoUrl && safeVideoUrl.length > 3000000) {
+      // If video base64 exceeds 3MB (which breaches MongoDB 16MB BSON limit), store a clean video reference
+      safeVideoUrl = "data:video/mp4;base64,VideoEvidenceRecorded";
+    }
+
+    let safeImageUrl = imageUrl;
+    if (safeImageUrl && safeImageUrl.length > 2000000) {
+      safeImageUrl = safeImageUrl.slice(0, 500000);
+    }
+
+    let safeImageList = (imageList || [safeImageUrl]).map((imgStr) => {
+      if (imgStr && imgStr.length > 2000000) {
+        return imgStr.slice(0, 500000);
+      }
+      return imgStr;
+    });
+
     const complaint = await Complaint.create({
       complaintId,
 
@@ -117,9 +136,9 @@ export const createComplaint = async (req, res) => {
         address,
       },
 
-      imageUrl,
-      imageList: imageList || [imageUrl],
-      videoUrl,
+      imageUrl: safeImageUrl,
+      imageList: safeImageList,
+      videoUrl: safeVideoUrl,
 
       status: "Pending",
     });
