@@ -78,10 +78,10 @@ export default function IncidentMap({
 
   const isValidCoords = !isNaN(parsedLat) && !isNaN(parsedLng) && parsedLat !== 0 && parsedLng !== 0;
 
-  // Default center if no coordinates set (Karnataka / Bengaluru center)
-  const centerLat = isValidCoords ? parsedLat : 12.9716;
-  const centerLng = isValidCoords ? parsedLng : 77.5946;
-  const zoom = isValidCoords ? 15 : 12;
+  // Default center if no coordinates set (General India Overview map)
+  const centerLat = isValidCoords ? parsedLat : 20.5937;
+  const centerLng = isValidCoords ? parsedLng : 78.9629;
+  const zoom = isValidCoords ? 15 : 5;
 
   return (
     <div className="space-y-2">
@@ -122,12 +122,12 @@ export default function IncidentMap({
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
-          <RecenterMap lat={centerLat} lng={centerLng} />
+          {isValidCoords && <RecenterMap lat={parsedLat} lng={parsedLng} />}
 
           <LocationMarker
-            position={[centerLat, centerLng]}
+            position={isValidCoords ? [parsedLat, parsedLng] : null}
             onLocationSelect={onLocationSelect}
-            address={address || (isValidCoords ? "Selected Incident Spot" : "Default Map Location (Click to Pin Spot)")}
+            address={address || "Selected Incident Spot"}
           />
         </MapContainer>
       </div>

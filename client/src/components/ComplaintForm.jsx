@@ -494,10 +494,10 @@ export default function ComplaintForm({ category, issue }) {
     setSelectedWardName(matchedWardName);
   };
 
-  // Detect GPS Location using HTML5 Geolocation API + Nominatim Reverse Geocoding
-  const detectLocation = (sourceType = "auto-gps") => {
+  // Detect GPS Location using HTML5 Geolocation API with IP Geolocation Fallback
+  const detectLocation = (sourceType = "manual-gps") => {
     if (!navigator.geolocation) {
-      setLocationError("Geolocation is not supported on this device/browser.");
+      fallbackIpLocation(sourceType);
       return;
     }
 
@@ -514,25 +514,37 @@ export default function ComplaintForm({ category, issue }) {
         await fetchAddressFromCoords(latitude, longitude);
         setIsDetectingLocation(false);
       },
-      (error) => {
-        console.log("Geolocation Error:", error);
-        setIsDetectingLocation(false);
-        let msg = "GPS Location detection failed.";
-        if (error.code === error.PERMISSION_DENIED) {
-          msg = "Location permission was denied. Please search your landmark/address above or click on the map to place your pin.";
-        } else if (error.code === error.TIMEOUT) {
-          msg = "GPS detection timed out. Please search your area above or click on the map pin.";
-        } else if (error.code === error.POSITION_UNAVAILABLE) {
-          msg = "Location information is unavailable. Search your area or click on the map pin.";
-        }
-        setLocationError(msg);
+      async (error) => {
+        console.log("Geolocation API note, attempting IP fallback:", error.message);
+        await fallbackIpLocation(sourceType);
       },
       {
         enableHighAccuracy: true,
-        timeout: 10000,
+        timeout: 8000,
         maximumAge: 0,
       }
     );
+  };
+
+  // Fallback to IP Geolocation when GPS API is blocked or times out on desktop
+  const fallbackIpLocation = async (sourceType = "manual-gps") => {
+    try {
+      setIsDetectingLocation(true);
+      const res = await fetch("https://ipapi.co/json/");
+      const data = await res.json();
+      if (data.latitude && data.longitude) {
+        setLocationSource(sourceType);
+        setLocationError("");
+        await fetchAddressFromCoords(data.latitude, data.longitude);
+      } else {
+        setLocationError("Location permission restricted. Please search your landmark/address above or click on the map to place your pin.");
+      }
+    } catch (ipErr) {
+      console.log("IP Geolocation Note:", ipErr);
+      setLocationError("Please search your landmark/address above or click on the map to place your pin.");
+    } finally {
+      setIsDetectingLocation(false);
+    }
   };
 
   // Helper to parse raw coordinates or Google Maps URLs
