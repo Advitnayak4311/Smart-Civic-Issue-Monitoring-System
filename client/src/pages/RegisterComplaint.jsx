@@ -161,11 +161,16 @@ export default function RegisterComplaint() {
     fetch("http://localhost:8000/api/service-config")
       .then((res) => res.json())
       .then((data) => {
-        if (data.success) {
-          setServices(data.services || []);
+        if (data && data.success && Array.isArray(data.services)) {
+          setServices(data.services);
+        } else {
+          setServices([]);
         }
       })
-      .catch(console.error);
+      .catch((err) => {
+        console.error(err);
+        setServices([]);
+      });
   }, []);
 
   const handleCategoryClick = (title) => {
@@ -175,9 +180,11 @@ export default function RegisterComplaint() {
     };
 
     // Combine default issues with dynamic backend issues and ensure 'Other [Category] Issue' is present
-    const dynamicIssues = services
-      .filter((s) => s.category === title)
-      .map((s) => s.subcategory);
+    const safeServices = Array.isArray(services) ? services : [];
+    const dynamicIssues = safeServices
+      .filter((s) => s && s.category === title)
+      .map((s) => s.subcategory)
+      .filter(Boolean);
 
     const mergedIssues = Array.from(
       new Set([
@@ -281,7 +288,7 @@ export default function RegisterComplaint() {
               </div>
 
               <ComplaintForm
-                category={selectedCategory.title}
+                category={selectedCategory?.title || "General"}
                 issue={selectedIssue}
               />
             </div>

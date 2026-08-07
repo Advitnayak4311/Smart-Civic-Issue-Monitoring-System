@@ -17,14 +17,17 @@ import complaintRouter from "./routes/complaintRoutes.js";
 import adminRouter from "./routes/adminRoutes.js";
 import serviceConfigRoutes from "./routes/serviceConfigRoutes.js";
 import departmentRoutes from "./routes/departmentRoutes.js";
+import gisRoutes from "./routes/gisRoutes.js";
+import transparencyRoutes from "./routes/transparencyRoutes.js";
+import aiRoutes from "./routes/aiRoutes.js";
 
 const app = express();
 
 const PORT = process.env.PORT || 8000;
 
-// Body parser limits set safely under Node's 17.8MB buffer slice threshold
-app.use(express.json({ limit: "15mb" }));
-app.use(express.urlencoded({ limit: "15mb", extended: true }));
+// Body parser limits set to 100mb to support high-resolution photo & video evidence uploads
+app.use(express.json({ limit: "100mb" }));
+app.use(express.urlencoded({ limit: "100mb", extended: true }));
 app.use(cookieParser());
 
 app.use(
@@ -46,6 +49,9 @@ app.use("/api/complaint", complaintRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/service-config", serviceConfigRoutes);
 app.use("/api/departments", departmentRoutes);
+app.use("/api/gis", gisRoutes);
+app.use("/api/transparency", transparencyRoutes);
+app.use("/api/ai", aiRoutes);
 
 // Global Error Handler to catch body-parser offset/payload errors gracefully
 app.use((err, req, res, next) => {

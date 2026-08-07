@@ -31,17 +31,19 @@ export const signup = async (req, res) => {
 
     const token = generateToken(newUser._id);
 
-    // Send Welcome Email Notification
-    try {
-      const emailContent = signupWelcomeEmail(newUser);
-      await sendEmail({
-        to: newUser.email,
-        subject: emailContent.subject,
-        html: emailContent.html,
-      });
-    } catch (mailErr) {
-      console.log("Signup Email Note:", mailErr.message);
-    }
+    // Send Welcome Email Notification in Background (< 10ms Response Speed)
+    setImmediate(async () => {
+      try {
+        const emailContent = signupWelcomeEmail(newUser);
+        await sendEmail({
+          to: newUser.email,
+          subject: emailContent.subject,
+          html: emailContent.html,
+        });
+      } catch (mailErr) {
+        console.log("Signup Email Note:", mailErr.message);
+      }
+    });
 
     res.json({ success: true, userData: newUser, token, message: "Account created successfully" });
   } catch (error) {
@@ -68,25 +70,27 @@ export const login = async (req, res) => {
 
     const token = generateToken(userData._id);
 
-    // Send Login Security Notification Email
-    try {
-      await sendEmail({
-        to: userData.email,
-        subject: "🔐 Smart Civic Portal Login Security Notice",
-        html: `
-          <div style="font-family:Arial,sans-serif;padding:24px;background:#f8fafc;">
-            <div style="max-width:550px;margin:auto;background:white;padding:24px;border-radius:12px;border:1px solid #e2e8f0;">
-              <h3 style="color:#0f172a;margin-top:0;">Account Login Activity Notice</h3>
-              <p>Hello <b>${userData.fullName}</b>,</p>
-              <p>Successful login to your Smart Civic Account on <b>${new Date().toLocaleString("en-IN")}</b>.</p>
-              <p style="font-size:12px;color:#64748b;">If this wasn't you, please reset your password immediately.</p>
+    // Send Login Security Notification Email in Background (< 10ms Response Speed)
+    setImmediate(async () => {
+      try {
+        await sendEmail({
+          to: userData.email,
+          subject: "🔐 Smart Civic Portal Login Security Notice",
+          html: `
+            <div style="font-family:Arial,sans-serif;padding:24px;background:#f8fafc;">
+              <div style="max-width:550px;margin:auto;background:white;padding:24px;border-radius:12px;border:1px solid #e2e8f0;">
+                <h3 style="color:#0f172a;margin-top:0;">Account Login Activity Notice</h3>
+                <p>Hello <b>${userData.fullName}</b>,</p>
+                <p>Successful login to your Smart Civic Account on <b>${new Date().toLocaleString("en-IN")}</b>.</p>
+                <p style="font-size:12px;color:#64748b;">If this wasn't you, please reset your password immediately.</p>
+              </div>
             </div>
-          </div>
-        `,
-      });
-    } catch (mailErr) {
-      console.log("Login Email Note:", mailErr.message);
-    }
+          `,
+        });
+      } catch (mailErr) {
+        console.log("Login Email Note:", mailErr.message);
+      }
+    });
 
     res.json({ success: true, userData, token, message: "Login successful" });
   } catch (error) {

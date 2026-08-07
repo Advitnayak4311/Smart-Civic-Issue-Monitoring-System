@@ -12,11 +12,19 @@ import {
   verifyComplaint,
   getClosedComplaints,
   deleteComplaint,
+  checkDuplicateComplaint,
+  supportComplaint,
 } from "../controllers/complaintController.js";
 
 // =========================================
 // Citizen Routes
 // =========================================
+
+// Check Duplicate Complaint (<300ms SLA)
+router.post("/check-duplicate", checkDuplicateComplaint);
+
+// Support Existing Complaint
+router.post("/support/:id", supportComplaint);
 
 // Register Complaint
 router.post("/", createComplaint);

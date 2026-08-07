@@ -30,6 +30,7 @@ import Footer from "../components/Footer";
 import StatusBadge from "../components/UI/StatusBadge";
 import PriorityBadge from "../components/UI/PriorityBadge";
 import IncidentMap from "../components/UI/IncidentMap";
+import CitizenTrustBadge from "../components/engagement/CitizenTrustBadge";
 import { INDIA_LOCATION_DATA, ALL_INDIAN_STATES, getTaluksForDistrict } from "../data/indiaLocations";
 
 // Curated photo avatars for quick citizen profile choice
@@ -85,7 +86,9 @@ export default function ProfilePage() {
 
   useEffect(() => {
     const token = localStorage.getItem("token");
-    if (!token) {
+    if (!token || token === "undefined" || token === "null") {
+      localStorage.removeItem("token");
+      localStorage.removeItem("userRole");
       navigate("/login");
       return;
     }
@@ -111,35 +114,44 @@ export default function ProfilePage() {
           const userDist = u.district || "BENGALURU URBAN";
 
           const initialUser = {
-            fullName: u.fullName || "Registered Citizen",
-            email: u.email || "citizen@gov.in",
+            fullName: u.fullName || "",
+            email: u.email || "",
             phone: u.phone || "",
             address: u.address || "",
             state: userState,
             district: userDist,
-            taluk: u.taluk || "Bengaluru North",
+            taluk: u.taluk || "",
             pincode: u.pincode || "",
             profilePic: u.profilePic || "",
           };
 
           setUser(initialUser);
           setEditForm(initialUser);
-        }
 
-        // Fetch Filed Grievances
-        const compRes = await fetch("http://localhost:8000/api/complaint/my", {
-          headers: {
-            token: token,
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        const compData = await compRes.json();
-        if (compData.success) {
-          setMyComplaints(compData.complaints || []);
+          // Fetch Filed Grievances
+          const compRes = await fetch("http://localhost:8000/api/complaint/my", {
+            headers: {
+              token: token,
+              Authorization: `Bearer ${token}`,
+            },
+          });
+          const compData = await compRes.json();
+          if (compData.success) {
+            setMyComplaints(compData.complaints || []);
+          }
+        } else {
+          // Token invalid or session expired - redirect to login
+          localStorage.removeItem("token");
+          localStorage.removeItem("userRole");
+          navigate("/login");
+          return;
         }
       }
     } catch (err) {
       console.error(err);
+      localStorage.removeItem("token");
+      localStorage.removeItem("userRole");
+      navigate("/login");
     } finally {
       setLoading(false);
     }
@@ -227,7 +239,7 @@ export default function ProfilePage() {
 
   // Grievance Counts
   const totalCount = myComplaints.length;
-  const pendingCount = myComplaints.filter((c) => c.status === "Pending").length;
+  const pendingCount = myComplaints.filter((c) => c.status === "Pending" || c.status === "Submitted" || !c.status).length;
   const inProgressCount = myComplaints.filter((c) => c.status === "In Progress" || c.status === "Accepted").length;
   const completedCount = myComplaints.filter((c) => c.status === "Completed" || c.status === "Closed").length;
 
@@ -241,7 +253,7 @@ export default function ProfilePage() {
       item.address?.toLowerCase().includes(searchQuery.toLowerCase());
 
     if (activeTab === "All") return matchesSearch;
-    if (activeTab === "Pending") return matchesSearch && item.status === "Pending";
+    if (activeTab === "Pending") return matchesSearch && (item.status === "Pending" || item.status === "Submitted" || !item.status);
     if (activeTab === "In Progress") return matchesSearch && (item.status === "In Progress" || item.status === "Accepted");
     if (activeTab === "Completed") return matchesSearch && (item.status === "Completed" || item.status === "Closed");
 
@@ -544,6 +556,13 @@ export default function ProfilePage() {
                   </div>
                 </div>
               )}
+
+              {/* Phase 4: Citizen Trust Score & Achievement Badge Widget */}
+              <CitizenTrustBadge
+                trustScore={user.trustScore || 85}
+                trustBadge={user.trustBadge || "Trusted Citizen"}
+                badges={user.badges || ["First Complaint", "Community Helper", "Trust Champion"]}
+              />
             </div>
 
             {/* 📜 Right Column: My Filed Grievances Log (7 cols) */}

@@ -12,7 +12,9 @@ import {
   CheckCircle2,
   Download,
   ShieldAlert,
-  Lock
+  Lock,
+  Bot,
+  Trash2
 } from "lucide-react";
 
 import Navbar from "../components/Navbar";
@@ -22,6 +24,7 @@ import AnalyticsCharts from "../components/admin/AnalyticsCharts";
 import SearchFilterBar from "../components/admin/SearchFilterBar";
 import ComplaintTable from "../components/admin/ComplaintTable";
 import ComplaintModal from "../components/admin/ComplaintModal";
+import DepartmentPerformanceGrid from "../components/admin/DepartmentPerformanceGrid";
 
 export default function AdminDashboard() {
   const [complaints, setComplaints] = useState([]);
@@ -36,9 +39,51 @@ export default function AdminDashboard() {
   const token = localStorage.getItem("token");
   const userRole = localStorage.getItem("userRole");
 
+  const [isEscalating, setIsEscalating] = useState(false);
+
   useEffect(() => {
     fetchComplaints();
   }, []);
+
+  const handleTriggerEscalations = async () => {
+    try {
+      setIsEscalating(true);
+      const res = await fetch("http://localhost:8000/api/admin/escalations/trigger", {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(data.message || "Escalation Engine evaluated active tickets.");
+        fetchComplaints();
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error triggering escalation engine.");
+    } finally {
+      setIsEscalating(false);
+    }
+  };
+
+  const handleClearAllComplaints = async () => {
+    if (!window.confirm("Are you sure you want to purge all active and closed grievance records? This action cannot be undone.")) {
+      return;
+    }
+    try {
+      const res = await fetch("http://localhost:8000/api/admin/clear-all", {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(data.message || "All grievance records purged successfully.");
+        fetchComplaints();
+      } else {
+        alert(data.message || "Failed to purge complaint records.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error purging complaint records.");
+    }
+  };
 
   const fetchComplaints = () => {
     fetch("http://localhost:8000/api/admin/complaints")
@@ -47,7 +92,8 @@ export default function AdminDashboard() {
       .catch((err) => console.log(err));
   };
 
-  if (!token || userRole === "citizen") {
+  // If user is explicitly logged in as a citizen, display clean Access Denied banner with Officer Login link
+  if (userRole === "citizen") {
     return (
       <div className="min-h-screen flex flex-col justify-between bg-slate-50">
         <div>
@@ -153,22 +199,24 @@ export default function AdminDashboard() {
     document.body.removeChild(link);
   };
 
+  const safeComplaints = Array.isArray(complaints) ? complaints : [];
+
   const chartData = [
     {
       name: "Pending",
-      value: complaints.filter((c) => c.status === "Pending").length,
+      value: safeComplaints.filter((c) => c?.status === "Pending").length,
     },
     {
       name: "Accepted",
-      value: complaints.filter((c) => c.status === "Accepted").length,
+      value: safeComplaints.filter((c) => c?.status === "Accepted").length,
     },
     {
       name: "In Progress",
-      value: complaints.filter((c) => c.status === "In Progress").length,
+      value: safeComplaints.filter((c) => c?.status === "In Progress").length,
     },
     {
       name: "Completed",
-      value: complaints.filter((c) => c.status === "Completed").length,
+      value: safeComplaints.filter((c) => c?.status === "Completed").length,
     },
   ];
 
@@ -177,25 +225,26 @@ export default function AdminDashboard() {
   const monthlyData = [
     {
       month: "Current Period",
-      complaints: complaints.length,
+      complaints: safeComplaints.length,
     },
   ];
 
   const departments = [
     ...new Set(
-      complaints
-        .map((complaint) => complaint.department)
+      safeComplaints
+        .map((complaint) => complaint?.department)
         .filter(Boolean)
     ),
   ];
 
   const departmentCounts = departments.map((department) => ({
     name: department,
-    count: complaints.filter((c) => c.department === department).length,
+    count: safeComplaints.filter((c) => c?.department === department).length,
   }));
 
-  const highPriorityComplaints = complaints.filter(
+  const highPriorityComplaints = safeComplaints.filter(
     (complaint) =>
+      complaint &&
       complaint.priority === "High" &&
       complaint.status !== "Closed"
   );
@@ -224,10 +273,34 @@ export default function AdminDashboard() {
             {/* Quick Action Navigation */}
             <div className="flex flex-wrap items-center gap-2.5">
               <button
+                onClick={() => navigate("/ai-command")}
+                className="flex items-center gap-2 text-xs font-black text-amber-300 bg-slate-800 hover:bg-slate-950 px-4 py-2.5 rounded-xl border border-amber-500/50 shadow-sm transition"
+              >
+                <Bot className="w-4 h-4 text-amber-400 animate-pulse" /> AI Command Center
+              </button>
+
+              <button
+                onClick={handleTriggerEscalations}
+                disabled={isEscalating}
+                className="flex items-center gap-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 px-3.5 py-2.5 rounded-xl transition shadow-sm border border-amber-500"
+              >
+                <AlertTriangle className="w-4 h-4 text-amber-200" />
+                {isEscalating ? "Escalating..." : "Run Auto-Escalation Engine"}
+              </button>
+
+              <button
                 onClick={handleExportCSV}
                 className="flex items-center gap-2 text-xs font-bold text-slate-200 hover:text-white bg-slate-800 hover:bg-slate-700 px-3.5 py-2.5 rounded-xl border border-slate-700 transition"
               >
                 <Download className="w-4 h-4 text-emerald-400" /> Export CSV
+              </button>
+
+              <button
+                onClick={handleClearAllComplaints}
+                className="flex items-center gap-2 text-xs font-bold text-red-300 hover:text-white bg-red-950/80 hover:bg-red-900 px-3.5 py-2.5 rounded-xl border border-red-800/80 transition shadow-sm"
+                title="Purge all dummy & test grievance records"
+              >
+                <Trash2 className="w-4 h-4 text-red-400" /> Purge All Data
               </button>
 
               <button
@@ -251,6 +324,9 @@ export default function AdminDashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
           {/* Executive KPI Summary */}
           <DashboardCards complaints={complaints} />
+
+          {/* Phase 2: Department Performance Index */}
+          <DepartmentPerformanceGrid />
 
           {/* Recharts Analytics */}
           <AnalyticsCharts

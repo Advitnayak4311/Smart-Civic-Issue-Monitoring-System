@@ -4,13 +4,17 @@ import axios from "axios";
 const API = axios.create({
   baseURL: "http://localhost:8000/api",
   withCredentials: true,
+  maxBodyLength: Infinity,
+  maxContentLength: Infinity,
 });
-
-// Debug log (remove after testing)
-console.log("✅ API Base URL:", API.defaults.baseURL);
 
 // Request interceptor
 API.interceptors.request.use((config) => {
+  const token = localStorage.getItem("token");
+  if (token) {
+    config.headers.token = token;
+    config.headers.Authorization = `Bearer ${token}`;
+  }
   console.log(
     `🚀 ${config.method?.toUpperCase()} Request:`,
     `${config.baseURL}${config.url}`

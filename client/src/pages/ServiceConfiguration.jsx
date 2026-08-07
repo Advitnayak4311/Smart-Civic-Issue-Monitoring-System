@@ -34,12 +34,23 @@ export default function ServiceConfiguration() {
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState(null);
 
+  const [deptList, setDeptList] = useState([]);
+
   useEffect(() => {
     fetch("http://localhost:8000/api/service-config")
       .then((res) => res.json())
       .then((data) => {
         if (data.success) {
           setServices(data.services);
+        }
+      })
+      .catch((err) => console.log(err));
+
+    fetch("http://localhost:8000/api/departments")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.departments)) {
+          setDeptList(data.departments);
         }
       })
       .catch((err) => console.log(err));
@@ -103,8 +114,13 @@ export default function ServiceConfiguration() {
       const data = await res.json();
 
       if (data.success) {
+        if (Array.isArray(data.services)) {
+          setServices(data.services);
+        } else {
+          // Fallback refresh
+          fetchServices();
+        }
         alert(isEditing ? "Rule updated successfully!" : "New service rule added successfully!");
-        setServices(data.services);
         resetForm();
       } else {
         alert(data.message || "Operation failed.");
@@ -115,13 +131,25 @@ export default function ServiceConfiguration() {
     }
   };
 
+  const fetchServices = () => {
+    fetch("http://localhost:8000/api/service-config")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.services)) {
+          setServices(data.services);
+        }
+      })
+      .catch((err) => console.log(err));
+  };
+
   const handleEdit = (s) => {
     setIsEditing(true);
     setEditingId(s._id);
-    setCategory(s.category);
-    setSubcategory(s.subcategory);
-    setDepartment(s.department);
-    setPriority(s.priority);
+    setCategory(s.category || "");
+    setSubcategory(s.subcategory || "");
+    setDepartment(s.department || "");
+    setPriority(s.priority || "Medium");
+    window.scrollTo({ top: 150, behavior: "smooth" });
   };
 
   const handleDelete = async (id) => {
@@ -133,8 +161,12 @@ export default function ServiceConfiguration() {
       });
       const data = await res.json();
       if (data.success) {
+        if (Array.isArray(data.services)) {
+          setServices(data.services);
+        } else {
+          setServices((prev) => prev.filter((item) => item._id !== id));
+        }
         alert("Service rule removed successfully.");
-        setServices(data.services);
       }
     } catch (err) {
       console.error(err);
@@ -218,11 +250,31 @@ export default function ServiceConfiguration() {
                 <label className="block font-bold text-slate-700">Assigned Department *</label>
                 <input
                   type="text"
+                  list="department-options"
                   value={department}
                   onChange={(e) => setDepartment(e.target.value)}
-                  placeholder="e.g. Public Works Dept (PWD)"
+                  placeholder="Select or type department name..."
                   className="w-full p-2.5 rounded-xl border border-slate-300 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-600 outline-none font-medium"
                 />
+                <datalist id="department-options">
+                  {deptList.map((d) => (
+                    <option key={d._id || d.name} value={d.name} />
+                  ))}
+                  <option value="Water Supply & Sewerage Board" />
+                  <option value="Drainage & Stormwater Division" />
+                  <option value="Roads & Highway Dept" />
+                  <option value="Public Works Dept (PWD)" />
+                  <option value="Electrical & Energy Dept" />
+                  <option value="Power Distribution & Grid Division" />
+                  <option value="Sanitation & Waste Management" />
+                  <option value="Public Health & Hygiene Dept" />
+                  <option value="Enforcement & Anti-Littering Squad" />
+                  <option value="Animal Husbandry & Veterinary Services" />
+                  <option value="Emergency Forestry & Pruning Squad" />
+                  <option value="Parks & Recreation Department" />
+                  <option value="Town Planning & Building Control" />
+                  <option value="Traffic Infrastructure & Signals Division" />
+                </datalist>
               </div>
 
               <div className="space-y-1">
