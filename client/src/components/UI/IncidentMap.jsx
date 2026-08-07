@@ -76,12 +76,12 @@ export default function IncidentMap({
   const parsedLat = parseFloat(latitude);
   const parsedLng = parseFloat(longitude);
 
-  const isValidCoords = !isNaN(parsedLat) && !isNaN(parsedLng) && parsedLat !== 0 && parsedLng !== 0;
+  const hasCoords = !isNaN(parsedLat) && !isNaN(parsedLng) && parsedLat !== 0 && parsedLng !== 0;
 
-  // Default center if no coordinates set (Karnataka / Bengaluru center)
-  const centerLat = isValidCoords ? parsedLat : 12.9716;
-  const centerLng = isValidCoords ? parsedLng : 77.5946;
-  const zoom = isValidCoords ? 15 : 12;
+  // Localized municipal fallback center (Bengaluru: 12.9716, 77.5946) if exact GPS coords pending
+  const centerLat = hasCoords ? parsedLat : 12.9716;
+  const centerLng = hasCoords ? parsedLng : 77.5946;
+  const zoom = hasCoords ? 16 : 13;
 
   return (
     <div className="space-y-2">
@@ -93,7 +93,7 @@ export default function IncidentMap({
         </div>
 
         <div className="flex items-center gap-3">
-          {isValidCoords && (
+          {hasCoords && (
             <a
               href={`https://www.google.com/maps?q=${parsedLat},${parsedLng}`}
               target="_blank"
@@ -127,7 +127,7 @@ export default function IncidentMap({
           <LocationMarker
             position={[centerLat, centerLng]}
             onLocationSelect={onLocationSelect}
-            address={address || (isValidCoords ? "Selected Incident Spot" : "Default Map Location (Click to Pin Spot)")}
+            address={address || "Selected Incident Spot"}
           />
         </MapContainer>
       </div>

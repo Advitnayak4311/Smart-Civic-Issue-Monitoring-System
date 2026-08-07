@@ -135,21 +135,15 @@ export default function TrackComplaint() {
                   placeholder="e.g. CIV-12345678 or SCMSC-XXXX"
                   value={complaintId}
                   onChange={(e) => setComplaintId(e.target.value)}
-                  onPaste={(e) => {
-                    const pastedText = e.clipboardData.getData("text");
-                    if (pastedText) {
-                      setComplaintId(pastedText.trim());
-                    }
-                  }}
                   onKeyDown={(e) => e.key === "Enter" && fetchComplaintById()}
                   className="w-full pl-10 pr-24 py-3 rounded-xl border border-slate-300 text-sm font-semibold bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-600 outline-none"
                 />
                 <button
                   type="button"
                   onClick={handlePasteFromClipboard}
-                  className="absolute right-2 top-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-[11px] font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition"
+                  className="absolute right-2 top-2 bg-blue-50 hover:bg-blue-100 text-blue-800 text-[11px] font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition border border-blue-200"
                 >
-                  <ClipboardPaste className="w-3 h-3 text-slate-600" /> Paste
+                  <ClipboardPaste className="w-3.5 h-3.5 text-blue-700" /> Paste
                 </button>
               </div>
 
@@ -229,14 +223,25 @@ export default function TrackComplaint() {
                 </div>
 
                 {/* Evidence Image */}
-                {complaint.imageUrl && (
+                {(complaint.imageUrl || (complaint.imageList && complaint.imageList.length > 0)) && (
                   <div className="space-y-2">
-                    <span className="text-xs font-bold text-slate-800">Photo Evidence Attached</span>
-                    <img
-                      src={complaint.imageUrl}
-                      alt="Complaint Evidence"
-                      className="w-full max-h-80 object-cover rounded-xl border border-slate-200 shadow-xs"
-                    />
+                    <span className="text-xs font-bold text-slate-800">
+                      Photo Evidence Attached ({(complaint.imageList && complaint.imageList.length > 0 ? complaint.imageList : [complaint.imageUrl]).length} File{((complaint.imageList && complaint.imageList.length > 0 ? complaint.imageList : [complaint.imageUrl]).length > 1) ? "s" : ""})
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {(complaint.imageList && complaint.imageList.length > 0
+                        ? complaint.imageList
+                        : [complaint.imageUrl]
+                      ).map((imgUrl, idx) => (
+                        <a key={idx} href={imgUrl} target="_blank" rel="noreferrer" title="Click to view full size">
+                          <img
+                            src={imgUrl}
+                            alt={`Evidence ${idx + 1}`}
+                            className="w-full h-48 object-cover rounded-xl border border-slate-200 shadow-xs bg-slate-100 hover:opacity-95 transition cursor-pointer"
+                          />
+                        </a>
+                      ))}
+                    </div>
                   </div>
                 )}
 

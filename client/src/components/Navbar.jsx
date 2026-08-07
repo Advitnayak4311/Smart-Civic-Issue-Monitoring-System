@@ -95,8 +95,17 @@ export default function Navbar() {
   // Strictly post-login valid admin session
   const isAuthenticatedAdmin =
     Boolean(token) &&
+    token !== "undefined" &&
+    token !== "null" &&
     (userRole === "officer" || userRole === "superadmin") &&
     isAdminContext;
+
+  // Strictly post-login valid citizen session
+  const isValidCitizenSession =
+    Boolean(token) &&
+    token !== "undefined" &&
+    token !== "null" &&
+    userRole === "citizen";
 
   return (
     <header className="sticky top-0 z-50 shadow-sm bg-white border-b border-slate-200">
@@ -309,6 +318,18 @@ export default function Navbar() {
                   <Archive className="w-3.5 h-3.5 text-slate-600 shrink-0" />
                   Archive
                 </Link>
+
+                <Link
+                  to="/transparency"
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-extrabold transition ${
+                    isActive("/transparency")
+                      ? "bg-amber-50 text-amber-900 border border-amber-300 shadow-xs"
+                      : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                  }`}
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  Public Portal
+                </Link>
               </>
             )}
           </nav>
@@ -350,7 +371,7 @@ export default function Navbar() {
             ) : (
               /* Citizen Action Bar */
               <>
-                {token ? (
+                {isValidCitizenSession ? (
                   <>
                     <Link
                       to="/profile"
@@ -405,7 +426,7 @@ export default function Navbar() {
             >
               Return to Public Portal
             </Link>
-          ) : isAdminDashboardRoute ? (
+          ) : isAdminContext ? (
             <>
               <Link
                 to="/admin"

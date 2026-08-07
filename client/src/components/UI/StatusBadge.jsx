@@ -1,6 +1,15 @@
 import { Clock, CheckCircle2, AlertCircle, Sparkles, CheckCheck } from "lucide-react";
 
-export default function StatusBadge({ status }) {
+export default function StatusBadge({ status, citizenVerified }) {
+  // STRICT RULE: Unless citizenVerified === "Yes", NEVER display "Completed" or "Verified"!
+  if ((status === "Completed" || status === "Under Verification") && citizenVerified !== "Yes") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-extrabold bg-amber-100 text-amber-950 border border-amber-400 shadow-xs animate-pulse">
+        <Clock className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+        Under Citizen Verification
+      </span>
+    );
+  }
   switch (status) {
     case "Pending":
       return (
@@ -23,11 +32,18 @@ export default function StatusBadge({ status }) {
           In Progress
         </span>
       );
+    case "Under Verification":
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-extrabold bg-amber-100 text-amber-950 border border-amber-400 shadow-xs animate-pulse">
+          <Clock className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+          Under Citizen Verification
+        </span>
+      );
     case "Completed":
       return (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">
           <CheckCheck className="w-3.5 h-3.5 text-emerald-600" />
-          Completed
+          Completed & Verified
         </span>
       );
     case "Closed":
@@ -35,6 +51,13 @@ export default function StatusBadge({ status }) {
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-slate-100 text-slate-700 border border-slate-300">
           <CheckCircle2 className="w-3.5 h-3.5 text-slate-500" />
           Closed & Archived
+        </span>
+      );
+    case "Reopened":
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-black bg-red-100 text-red-900 border border-red-400 shadow-xs animate-pulse">
+          <AlertCircle className="w-3.5 h-3.5 text-red-600 shrink-0" />
+          Reopened (Unresolved)
         </span>
       );
     default:

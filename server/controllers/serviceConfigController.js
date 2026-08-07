@@ -38,9 +38,12 @@ export const createService = async (req, res) => {
       console.log("Service Rule Email Note:", mailErr.message);
     }
 
+    const allServices = await ServiceConfig.find().sort({ category: 1, subcategory: 1 });
+
     res.status(201).json({
       success: true,
       service,
+      services: allServices,
     });
   } catch (error) {
     res.status(500).json({
@@ -83,24 +86,29 @@ export const updateService = async (req, res) => {
       { new: true }
     );
 
-    // 📩 Send Service Rule Update Notification Email
-    try {
-      if (service) {
-        const emailContent = serviceConfigNoticeEmail(service);
-        const adminEmail = process.env.EMAIL_USER || "attendancesystemcec@gmail.com";
-        await sendEmail({
-          to: adminEmail,
-          subject: emailContent.subject,
-          html: emailContent.html,
-        });
+    // 📩 Send Service Rule Update Notification Email in Background
+    setImmediate(async () => {
+      try {
+        if (service) {
+          const emailContent = serviceConfigNoticeEmail(service);
+          const adminEmail = process.env.EMAIL_USER || "attendancesystemcec@gmail.com";
+          await sendEmail({
+            to: adminEmail,
+            subject: emailContent.subject,
+            html: emailContent.html,
+          });
+        }
+      } catch (mailErr) {
+        console.log("Service Rule Email Note:", mailErr.message);
       }
-    } catch (mailErr) {
-      console.log("Service Rule Email Note:", mailErr.message);
-    }
+    });
+
+    const allServices = await ServiceConfig.find().sort({ category: 1, subcategory: 1 });
 
     res.status(200).json({
       success: true,
       service,
+      services: allServices,
     });
   } catch (error) {
     res.status(500).json({
@@ -116,10 +124,12 @@ export const updateService = async (req, res) => {
 export const deleteService = async (req, res) => {
   try {
     await ServiceConfig.findByIdAndDelete(req.params.id);
+    const allServices = await ServiceConfig.find().sort({ category: 1, subcategory: 1 });
 
     res.status(200).json({
       success: true,
       message: "Service deleted successfully.",
+      services: allServices,
     });
   } catch (error) {
     res.status(500).json({

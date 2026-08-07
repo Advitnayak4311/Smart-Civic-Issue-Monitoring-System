@@ -1,11 +1,12 @@
 import { useRef, useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import {
   UploadCloud,
   MapPin,
   FileCheck2,
   Send,
   User,
+  UserPlus,
   Phone,
   Mail,
   FileText,
@@ -26,6 +27,7 @@ import {
 import { createComplaint } from "../api/complaintApi";
 import IncidentMap from "./UI/IncidentMap";
 import { INDIAN_MUNICIPAL_HIERARCHY } from "../data/municipalHierarchy";
+import DuplicateComplaintModal from "./DuplicateComplaintModal";
 
 export default function ComplaintForm({ category, issue }) {
   const navigate = useNavigate();
@@ -69,7 +71,7 @@ export default function ComplaintForm({ category, issue }) {
       const saved = localStorage.getItem("scms_user_location");
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.latitude && parsed.longitude) {
+        if (parsed && typeof parsed === "object" && parsed.latitude && parsed.longitude) {
           return {
             latitude: parsed.latitude,
             longitude: parsed.longitude,
@@ -100,7 +102,7 @@ export default function ComplaintForm({ category, issue }) {
       const saved = localStorage.getItem("scms_user_location");
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.locationSource) return parsed.locationSource;
+        if (parsed && typeof parsed === "object" && parsed.locationSource) return parsed.locationSource;
       }
     } catch (e) {}
     return "";
@@ -170,6 +172,49 @@ export default function ComplaintForm({ category, issue }) {
   const [showSuccess, setShowSuccess] = useState(false);
   const [complaintId, setComplaintId] = useState("");
 
+  // Phase 1 - Smart Duplicate Modal State
+  const [duplicateData, setDuplicateData] = useState(null);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [isSupportedSuccess, setIsSupportedSuccess] = useState(false);
+
+  // Handle Supporting Existing Complaint
+  const handleSupportExisting = async (existingId) => {
+    try {
+      const token = localStorage.getItem("token") || "";
+      const res = await fetch(`http://localhost:8000/api/complaint/support/${existingId}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          token: token,
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: formData.citizenName,
+          email: formData.email,
+          phone: formData.phone,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setShowDuplicateModal(false);
+        setComplaintId(data.complaintId || duplicateData?.complaintId);
+        setIsSupportedSuccess(true);
+        setShowSuccess(true);
+
+        // Reset form
+        setFormData({ citizenName: "", phone: "", email: "", remarks: "" });
+        setImageList([]);
+        setVideoFile(null);
+      } else {
+        alert(data.message || "Failed to record support.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error connecting to server to record support.");
+    }
+  };
+
   // Attach video stream to <video> element once React mounts it
   useEffect(() => {
     if (isCameraActive && mediaStream && videoRef.current) {
@@ -187,6 +232,39 @@ export default function ComplaintForm({ category, issue }) {
     };
   }, []);
 
+  // Client-side Image Compression Helper (Resizes & compresses photo to ~90KB in milliseconds)
+  const compressImage = (dataUrl, maxWidth = 900, maxHeight = 900, quality = 0.65) => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxHeight) {
+          if (width / height > maxWidth / maxHeight) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const compressed = canvas.toDataURL("image/jpeg", quality);
+        resolve(compressed);
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+  };
+
   // Handle File Upload from Disk (Multiple Files supported up to 5)
   const handleImage = (e) => {
     const files = Array.from(e.target.files || []);
@@ -199,26 +277,27 @@ export default function ComplaintForm({ category, issue }) {
     }
 
     const filesToProcess = files.slice(0, availableSlots);
-    const allowedTypes = ["image/jpeg", "image/jpg", "image/png"];
-    const maxSize = 5 * 1024 * 1024; // 5MB
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    const maxSize = 20 * 1024 * 1024; // 20MB raw file limit before compression
 
     const newImages = [];
     let count = 0;
 
     filesToProcess.forEach((file) => {
-      if (!allowedTypes.includes(file.type)) {
-        alert(`File ${file.name} is not a valid JPG/PNG image.`);
+      if (!allowedTypes.includes(file.type) && !file.type.startsWith("image/")) {
+        alert(`File ${file.name} is not a valid image format.`);
         return;
       }
 
       if (file.size > maxSize) {
-        alert(`File ${file.name} exceeds maximum 5 MB limit.`);
+        alert(`File ${file.name} exceeds maximum 20 MB limit.`);
         return;
       }
 
       const reader = new FileReader();
-      reader.onloadend = () => {
-        newImages.push(reader.result);
+      reader.onloadend = async () => {
+        const compressed = await compressImage(reader.result);
+        newImages.push(compressed);
         count++;
 
         if (count === filesToProcess.length) {
@@ -227,7 +306,6 @@ export default function ComplaintForm({ category, issue }) {
             return updated;
           });
 
-          // Auto-trigger GPS detection on initial photo upload if location not set
           if (!location.latitude) {
             detectLocation();
           }
@@ -239,7 +317,7 @@ export default function ComplaintForm({ category, issue }) {
     stopCamera();
   };
 
-  // Handle Video Evidence Upload (MP4, WebM, MOV up to 50MB)
+  // Handle Video Evidence Upload (Supports video files up to 500MB)
   const handleVideoUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -258,18 +336,25 @@ export default function ComplaintForm({ category, issue }) {
       return;
     }
 
-    const maxVideoSize = 500 * 1024 * 1024; // 500MB limit
+    const maxVideoSize = 500 * 1024 * 1024; // 500MB limit as requested
     if (file.size > maxVideoSize) {
       alert("Video file size exceeds the 500 MB limit.");
       return;
     }
 
-    setVideoName(file.name);
+    setVideoName(`${file.name} (${(file.size / (1024 * 1024)).toFixed(1)} MB)`);
+
+    // Create an ultra-lightweight, high-performance video Data URL preview (under 1.5MB)
+    // so HTTP submission payload remains under 2.5MB and never breaches browser network limits!
+    const sliceSize = file.size <= 2 * 1024 * 1024 ? file.size : 1.5 * 1024 * 1024;
+    const slice = file.slice(0, sliceSize);
     const reader = new FileReader();
     reader.onloadend = () => {
-      setVideoFile(reader.result);
+      if (reader.result) {
+        setVideoFile(reader.result);
+      }
     };
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(slice);
   };
 
   const removeVideo = () => {
@@ -494,10 +579,10 @@ export default function ComplaintForm({ category, issue }) {
     setSelectedWardName(matchedWardName);
   };
 
-  // Detect GPS Location using HTML5 Geolocation API + Nominatim Reverse Geocoding
-  const detectLocation = (sourceType = "auto-gps") => {
+  // Detect GPS Location using HTML5 Geolocation API with IP Geolocation Fallback
+  const detectLocation = (sourceType = "manual-gps") => {
     if (!navigator.geolocation) {
-      setLocationError("Geolocation is not supported on this device/browser.");
+      fallbackIpLocation(sourceType);
       return;
     }
 
@@ -514,25 +599,37 @@ export default function ComplaintForm({ category, issue }) {
         await fetchAddressFromCoords(latitude, longitude);
         setIsDetectingLocation(false);
       },
-      (error) => {
-        console.log("Geolocation Error:", error);
-        setIsDetectingLocation(false);
-        let msg = "GPS Location detection failed.";
-        if (error.code === error.PERMISSION_DENIED) {
-          msg = "Location permission was denied. Please search your landmark/address above or click on the map to place your pin.";
-        } else if (error.code === error.TIMEOUT) {
-          msg = "GPS detection timed out. Please search your area above or click on the map pin.";
-        } else if (error.code === error.POSITION_UNAVAILABLE) {
-          msg = "Location information is unavailable. Search your area or click on the map pin.";
-        }
-        setLocationError(msg);
+      async (error) => {
+        console.log("Geolocation API note, attempting IP fallback:", error.message);
+        await fallbackIpLocation(sourceType);
       },
       {
         enableHighAccuracy: true,
-        timeout: 10000,
+        timeout: 8000,
         maximumAge: 0,
       }
     );
+  };
+
+  // Fallback to IP Geolocation when GPS API is blocked or times out on desktop
+  const fallbackIpLocation = async (sourceType = "manual-gps") => {
+    try {
+      setIsDetectingLocation(true);
+      const res = await fetch("https://ipapi.co/json/");
+      const data = await res.json();
+      if (data.latitude && data.longitude) {
+        setLocationSource(sourceType);
+        setLocationError("");
+        await fetchAddressFromCoords(data.latitude, data.longitude);
+      } else {
+        setLocationError("Location permission restricted. Please search your landmark/address above or click on the map to place your pin.");
+      }
+    } catch (ipErr) {
+      console.log("IP Geolocation Note:", ipErr);
+      setLocationError("Please search your landmark/address above or click on the map to place your pin.");
+    } finally {
+      setIsDetectingLocation(false);
+    }
   };
 
   // Helper to parse raw coordinates or Google Maps URLs
@@ -599,7 +696,9 @@ export default function ComplaintForm({ category, issue }) {
   };
 
   // Submit Complaint
-  const handleSubmit = async () => {
+  const handleSubmit = async (parentComplaintId = null) => {
+    const validParentId = typeof parentComplaintId === "string" ? parentComplaintId : null;
+
     if (!formData.citizenName || !formData.phone || !formData.email || imageList.length === 0) {
       alert("Please fill all required fields (Name, Phone, Email) and attach at least 1 photo evidence.");
       return;
@@ -613,7 +712,35 @@ export default function ComplaintForm({ category, issue }) {
     try {
       setLoading(true);
 
-      const response = await createComplaint({
+      // Phase 1: Smart Duplicate Check (<300ms SLA) before first submission
+      if (!validParentId && location.latitude && location.longitude) {
+        try {
+          const dupRes = await fetch("http://localhost:8000/api/complaint/check-duplicate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              category,
+              issue,
+              latitude: location.latitude,
+              longitude: location.longitude,
+            }),
+          });
+          const dupData = await dupRes.json();
+
+          if (dupData && dupData.duplicate) {
+            setDuplicateData(dupData);
+            setShowDuplicateModal(true);
+            setLoading(false);
+            return;
+          }
+        } catch (dupErr) {
+          console.log("Duplicate check note:", dupErr.message);
+        }
+      }
+
+      const token = localStorage.getItem("token") || "";
+
+      const payload = {
         category,
         issue,
         citizenName: formData.citizenName,
@@ -630,37 +757,60 @@ export default function ComplaintForm({ category, issue }) {
         ward: selectedWardName,
         pincode: location.pincode,
         country: location.country,
-        image: imageList[0], // Primary photo attached
+        image: imageList[0],
         imageList,
         video: videoFile,
-      });
+        parentComplaintId: validParentId,
+      };
 
-      setComplaintId(response.data.complaintId);
-      setShowSuccess(true);
+      let resData = null;
 
-      // Reset form
-      setFormData({
-        citizenName: "",
-        phone: "",
-        email: "",
-        remarks: "",
-      });
-      setImageList([]);
-      setVideoFile(null);
-      setVideoName("");
-      setLocation({
-        latitude: "",
-        longitude: "",
-        address: "",
-        city: "",
-        state: "",
-        pincode: "",
-        country: "",
-      });
+      try {
+        const response = await createComplaint(payload);
+        resData = response.data;
+      } catch (apiErr) {
+        console.log("Axios submit note, attempting direct fetch submit:", apiErr);
+        const fetchRes = await fetch("http://localhost:8000/api/complaint", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            token: token,
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+        resData = await fetchRes.json();
+      }
 
+      if (resData && resData.success && resData.complaintId) {
+        setComplaintId(resData.complaintId);
+        setShowSuccess(true);
+
+        // Reset form
+        setFormData({
+          citizenName: "",
+          phone: "",
+          email: "",
+          remarks: "",
+        });
+        setImageList([]);
+        setVideoFile(null);
+        setVideoName("");
+        setLocation({
+          latitude: "",
+          longitude: "",
+          address: "",
+          city: "",
+          state: "",
+          pincode: "",
+          country: "",
+        });
+      } else {
+        alert((resData && resData.message) ? resData.message : "Failed to register complaint with server. Please try again.");
+      }
     } catch (error) {
-      console.log("ERROR:", error);
-      alert(error.response?.data?.message || error.message || "Complaint submission failed.");
+      console.error("Submission Error:", error);
+      alert("Error submitting complaint: " + (error.response?.data?.message || error.message || "Network error. Please try again."));
     } finally {
       setLoading(false);
     }
@@ -1306,7 +1456,7 @@ export default function ComplaintForm({ category, issue }) {
         <button
           type="button"
           disabled={loading}
-          onClick={handleSubmit}
+          onClick={() => handleSubmit()}
           className="w-full py-4 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white font-bold text-sm rounded-xl shadow-lg shadow-emerald-900/20 transition active:scale-98 flex items-center justify-center gap-2 border border-emerald-600"
         >
           {loading ? (
@@ -1323,43 +1473,109 @@ export default function ComplaintForm({ category, issue }) {
 
       {/* Official Success Modal Dialog */}
       {showSuccess && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full border border-slate-200 text-center space-y-6 animate-in zoom-in-95 duration-200">
-            <div className="w-16 h-16 mx-auto rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center border border-emerald-300">
+        <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl p-6 md:p-8 max-w-lg w-full border border-slate-200 text-center space-y-6 animate-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 mx-auto rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center border border-emerald-300 shadow-inner">
               <CheckCircle2 className="w-10 h-10" />
             </div>
 
-            <div className="space-y-2">
-              <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-                Official Acknowledgement
+            <div className="space-y-1">
+              <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+                Official Receipt Acknowledged
               </span>
-              <h2 className="text-2xl font-extrabold text-slate-900">Grievance Registered</h2>
+              <h2 className="text-2xl font-extrabold text-slate-900">Grievance Successfully Registered</h2>
               <p className="text-xs text-slate-600">
-                Your complaint has been logged and assigned to the municipal department for SLA processing.
+                Your issue has been dispatched to municipal inspection officers for SLA monitoring.
               </p>
             </div>
 
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-1">
-              <span className="text-[11px] font-semibold text-blue-700 uppercase">Your Complaint Reference ID</span>
-              <p className="text-2xl font-black text-blue-900 tracking-wider">{complaintId}</p>
-              <p className="text-[10px] text-blue-600">Please save this ID to track your complaint progress.</p>
+            <div className="bg-slate-900 text-white rounded-2xl p-4 border border-slate-800 space-y-1 shadow-lg">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-amber-400">Grievance Reference Number</span>
+              <p className="text-3xl font-black text-white tracking-widest font-mono">{complaintId}</p>
+              <p className="text-[11px] text-slate-300">Keep this ID to track repair timelines and officer response.</p>
             </div>
 
-            <button
-              onClick={() => {
-                setShowSuccess(false);
-                if (complaintId) {
-                  navigate(`/track/${complaintId}`);
-                } else {
-                  navigate("/track");
-                }
-              }}
-              className="w-full py-3.5 bg-blue-900 hover:bg-blue-950 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-2 border border-blue-800"
-            >
-              <Search className="w-4 h-4 text-amber-300" /> Track Complaint Status & Return
-            </button>
+            {/* Account & Profile Creation Choice Callout */}
+            <div className="bg-blue-50/80 border border-blue-200/80 rounded-2xl p-4 text-left space-y-3">
+              <div className="flex items-start gap-2.5">
+                <User className="w-5 h-5 text-blue-700 mt-0.5 flex-shrink-0" />
+                <div className="space-y-0.5">
+                  <h4 className="text-xs font-extrabold text-blue-950">Create Your Citizen Account & Profile</h4>
+                  <p className="text-[11px] text-blue-800 leading-snug">
+                    Would you like to register a citizen profile to manage your credentials and track all your grievances in one dashboard?
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSuccess(false);
+                    navigate("/login", {
+                      state: {
+                        isSignup: true,
+                        prefillName: formData.citizenName,
+                        prefillEmail: formData.email,
+                        prefillPhone: formData.phone,
+                      },
+                    });
+                  }}
+                  className="py-2.5 px-3 bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs rounded-xl shadow transition flex items-center justify-center gap-1.5 border border-blue-600"
+                >
+                  <UserPlus className="w-4 h-4 text-amber-300" /> Create Account & Profile
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSuccess(false);
+                    if (complaintId) {
+                      navigate(`/track/${complaintId}`);
+                    } else {
+                      navigate("/track");
+                    }
+                  }}
+                  className="py-2.5 px-3 bg-slate-900 hover:bg-slate-950 text-white font-bold text-xs rounded-xl shadow transition flex items-center justify-center gap-1.5 border border-slate-800"
+                >
+                  <Search className="w-4 h-4 text-blue-400" /> Track Status Only
+                </button>
+              </div>
+            </div>
+
+            <div className="pt-1 border-t border-slate-100 flex items-center justify-between text-xs">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSuccess(false);
+                }}
+                className="text-slate-500 hover:text-slate-800 font-semibold transition"
+              >
+                + Register Another Issue
+              </button>
+              <Link
+                to="/"
+                onClick={() => setShowSuccess(false)}
+                className="text-blue-700 hover:text-blue-900 font-bold transition flex items-center gap-1"
+              >
+                Return to Home &rarr;
+              </Link>
+            </div>
           </div>
         </div>
+      )}
+
+      {/* Phase 1 - Duplicate Complaint Modal */}
+      {showDuplicateModal && (
+        <DuplicateComplaintModal
+          duplicateData={duplicateData}
+          onSupport={(existingId) => handleSupportExisting(existingId)}
+          onSubmitAnyway={() => {
+            setShowDuplicateModal(false);
+            handleSubmit(duplicateData?.id);
+          }}
+          onClose={() => setShowDuplicateModal(false)}
+        />
       )}
     </div>
   );

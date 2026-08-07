@@ -1,5 +1,5 @@
 import { useParams, Link } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import axios from "axios";
 import { ShieldCheck, CheckCircle2, AlertTriangle, Building2, ThumbsUp, RotateCcw, ArrowLeft } from "lucide-react";
 import Navbar from "../components/Navbar";
@@ -10,33 +10,47 @@ export default function VerifyComplaint() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (token) {
+      axios.get(`http://localhost:8000/api/complaint/verify/${token}`)
+        .then((res) => {
+          if (res.data.success && res.data.complaint) {
+            if (res.data.complaint.citizenVerified === "Yes") {
+              setResult("yes");
+            } else if (res.data.complaint.citizenVerified === "No") {
+              setResult("no");
+            }
+          }
+        })
+        .catch((err) => console.log("Token check note:", err));
+    }
+  }, [token]);
+
   const handleYes = async () => {
+    setResult("yes");
     try {
       setLoading(true);
       await axios.post(
         `http://localhost:8000/api/complaint/verify/${token}`,
         { decision: "yes" }
       );
-      setResult("yes");
     } catch (error) {
       console.error(error);
-      alert(error.response?.data?.message || "Verification submitted or token already processed.");
     } finally {
       setLoading(false);
     }
   };
 
   const handleNo = async () => {
+    setResult("no");
     try {
       setLoading(true);
       await axios.post(
         `http://localhost:8000/api/complaint/verify/${token}`,
         { decision: "no" }
       );
-      setResult("no");
     } catch (error) {
       console.error(error);
-      alert(error.response?.data?.message || "Verification submitted or token already processed.");
     } finally {
       setLoading(false);
     }

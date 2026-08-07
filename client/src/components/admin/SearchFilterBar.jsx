@@ -35,9 +35,9 @@ export default function SearchFilterBar({
         >
           <option value="All">All Statuses</option>
           <option value="Pending">Pending</option>
-          <option value="Accepted">Accepted</option>
           <option value="In Progress">In Progress</option>
           <option value="Completed">Completed</option>
+          <option value="Reopened">🔴 Reopened</option>
         </select>
 
         <select

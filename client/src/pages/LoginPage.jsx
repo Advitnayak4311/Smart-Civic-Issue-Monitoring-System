@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import {
   Lock,
   Mail,
@@ -12,7 +12,8 @@ import {
   KeyRound,
   CheckCircle2,
   RefreshCw,
-  ArrowRight
+  ArrowRight,
+  Phone
 } from "lucide-react";
 
 import Navbar from "../components/Navbar";
@@ -20,14 +21,17 @@ import Footer from "../components/Footer";
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const [isSignup, setIsSignup] = useState(false);
+  const location = useLocation();
+
+  const [isSignup, setIsSignup] = useState(location.state?.isSignup || false);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const [formData, setFormData] = useState({
-    fullName: "",
-    email: "",
+    fullName: location.state?.prefillName || "",
+    email: location.state?.prefillEmail || "",
+    phone: location.state?.prefillPhone || "",
     password: "",
     address: "",
   });
@@ -54,21 +58,16 @@ export default function LoginPage() {
 
       const data = await res.json();
       if (data.success) {
-        localStorage.setItem("token", data.token || "citizen_token");
+        const authToken = data.token || "valid_citizen_jwt_" + Date.now();
+        localStorage.setItem("token", authToken);
         localStorage.setItem("userRole", "citizen");
-        alert(data.message || (isSignup ? "Citizen Account created successfully!" : "Citizen Login successful!"));
-        navigate("/profile");
+        navigate("/profile", { replace: true });
       } else {
-        localStorage.setItem("token", "citizen_demo_token_" + Date.now());
-        localStorage.setItem("userRole", "citizen");
-        alert("Citizen Login Successful!");
-        navigate("/profile");
+        setError(data.message || "Invalid email or password. Please try again.");
       }
     } catch (err) {
       console.error(err);
-      localStorage.setItem("token", "citizen_demo_token");
-      localStorage.setItem("userRole", "citizen");
-      navigate("/profile");
+      setError("Unable to connect to authentication server. Please check your connection.");
     } finally {
       setLoading(false);
     }
