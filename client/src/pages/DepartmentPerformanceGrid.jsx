@@ -137,9 +137,13 @@ export default function DepartmentPerformanceGrid() {
 
                 <div className="bg-white p-2.5 rounded-xl border border-slate-200/70 space-y-0.5">
                   <span className="text-[10px] font-bold text-slate-400 uppercase">Citizen Rating</span>
-                  <p className="font-extrabold text-amber-600 text-sm flex items-center gap-1">
-                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500" /> {dept.citizenRating} / 5.0
-                  </p>
+                  {dept.citizenRating ? (
+                    <p className="font-extrabold text-amber-600 text-sm flex items-center gap-1">
+                      <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500" /> {dept.citizenRating} / 5.0
+                    </p>
+                  ) : (
+                    <p className="font-bold text-slate-400 text-xs italic mt-0.5">Pending Feedback</p>
+                  )}
                 </div>
               </div>
 

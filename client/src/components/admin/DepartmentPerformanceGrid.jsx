@@ -1,10 +1,27 @@
 import { useState, useEffect } from "react";
-import { Building2, Award, Clock, Star, ShieldAlert, CheckCircle2, TrendingUp, Filter } from "lucide-react";
+import {
+  Building2,
+  Award,
+  Clock,
+  Star,
+  ShieldAlert,
+  CheckCircle2,
+  TrendingUp,
+  Filter,
+  MessageSquare,
+  ChevronDown,
+  ChevronUp,
+  ThumbsUp,
+  RotateCcw,
+  User,
+  Calendar,
+} from "lucide-react";
 
 export default function DepartmentPerformanceGrid() {
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState("grade");
+  const [expandedDept, setExpandedDept] = useState(null);
 
   useEffect(() => {
     fetchDepartments();
@@ -49,6 +66,10 @@ export default function DepartmentPerformanceGrid() {
     }
   };
 
+  const toggleDeptFeedback = (deptName) => {
+    setExpandedDept((prev) => (prev === deptName ? null : deptName));
+  };
+
   return (
     <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
       {/* Section Header */}
@@ -59,10 +80,10 @@ export default function DepartmentPerformanceGrid() {
             Executive Governance Metric
           </div>
           <h2 className="text-xl font-extrabold text-slate-900 tracking-tight">
-            Department Performance Index & Letter Grades
+            Department Performance Index & Citizen Feedback
           </h2>
           <p className="text-slate-500 text-xs mt-0.5">
-            Automated SLA efficiency ratings, resolution speed, and citizen satisfaction scores across municipal divisions.
+            Automated SLA efficiency ratings, resolution speed, and verified customer comments across municipal divisions.
           </p>
         </div>
 
@@ -73,7 +94,7 @@ export default function DepartmentPerformanceGrid() {
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            className="p-2 rounded-xl border border-slate-300 bg-slate-50 font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-600"
+            className="p-2 rounded-xl border border-slate-300 bg-slate-50 font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-600 cursor-pointer"
           >
             <option value="grade">Performance Grade (Highest)</option>
             <option value="sla">SLA Compliance %</option>
@@ -87,69 +108,176 @@ export default function DepartmentPerformanceGrid() {
       {/* Grid Cards */}
       {loading ? (
         <div className="py-12 text-center text-slate-400 font-medium text-xs">
-          Calculating Department SLA Performance Metrics...
+          Calculating Department SLA Performance & Customer Feedback...
         </div>
       ) : sortedDepartments.length === 0 ? (
         <div className="py-12 text-center text-slate-400 font-medium text-xs">
           No department data available yet.
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {sortedDepartments.map((dept) => (
-            <div
-              key={dept.department}
-              className="bg-slate-50/70 hover:bg-slate-50 border border-slate-200/90 rounded-2xl p-5 shadow-2xs transition flex flex-col justify-between space-y-4 hover:border-slate-300"
-            >
-              {/* Card Header */}
-              <div className="flex justify-between items-start gap-3 border-b border-slate-200/80 pb-3">
-                <div className="space-y-1">
-                  <span className="text-[10px] font-bold text-blue-900 uppercase tracking-wider flex items-center gap-1">
-                    <Building2 className="w-3.5 h-3.5 text-slate-400" /> Municipal Division
-                  </span>
-                  <h3 className="font-extrabold text-sm text-slate-900 leading-snug">{dept.department}</h3>
-                </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 items-start">
+          {sortedDepartments.map((dept) => {
+            const isExpanded = expandedDept === dept.department;
+            const feedbacks = (dept.feedbackList || []).filter(
+              (fb) => fb.citizenVerified !== "Pending" && (fb.rating != null || fb.comment)
+            );
 
-                {/* Grade Badge */}
-                <div className="flex flex-col items-center">
-                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-black text-base border ${getGradeStyle(dept.grade)}`}>
-                    {dept.grade}
+            return (
+              <div
+                key={dept.department}
+                className="bg-slate-50/80 hover:bg-slate-50 border border-slate-200/90 rounded-2xl p-5 shadow-2xs transition flex flex-col justify-between space-y-4 hover:border-slate-300"
+              >
+                {/* Card Header */}
+                <div className="flex justify-between items-start gap-3 border-b border-slate-200/80 pb-3">
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-blue-900 uppercase tracking-wider flex items-center gap-1">
+                      <Building2 className="w-3.5 h-3.5 text-slate-400" /> Municipal Division
+                    </span>
+                    <h3 className="font-extrabold text-sm text-slate-900 leading-snug">{dept.department}</h3>
                   </div>
-                  <span className="text-[9px] font-extrabold text-slate-500 mt-1 uppercase">Grade</span>
+
+                  {/* Grade Badge */}
+                  <div className="flex flex-col items-center">
+                    <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-black text-base border ${getGradeStyle(dept.grade)}`}>
+                      {dept.grade}
+                    </div>
+                    <span className="text-[9px] font-extrabold text-slate-500 mt-1 uppercase">Grade</span>
+                  </div>
+                </div>
+
+                {/* Metrics Grid */}
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200/70 space-y-0.5">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">SLA Compliance</span>
+                    <p className="font-extrabold text-emerald-700 text-base">{dept.slaCompliancePercent}%</p>
+                  </div>
+
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200/70 space-y-0.5">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">Avg Speed</span>
+                    <p className="font-extrabold text-blue-900 text-base">{dept.avgResolutionDays} Days</p>
+                  </div>
+
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200/70 space-y-0.5">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">Pending Tickets</span>
+                    <p className="font-extrabold text-amber-800 text-sm">{dept.pending} Tickets</p>
+                  </div>
+
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200/70 space-y-0.5">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">Citizen Rating</span>
+                    {dept.citizenRating ? (
+                      <p className="font-extrabold text-amber-600 text-sm flex items-center gap-1">
+                        <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500" /> {dept.citizenRating} / 5.0
+                      </p>
+                    ) : (
+                      <p className="font-bold text-slate-400 text-xs italic mt-0.5">Pending Feedback</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Customer Feedback Accordion Button */}
+                <button
+                  type="button"
+                  onClick={() => toggleDeptFeedback(dept.department)}
+                  className="w-full py-2 px-3 bg-white hover:bg-slate-100/80 rounded-xl border border-slate-200 text-slate-700 font-bold text-[11px] flex items-center justify-between transition cursor-pointer"
+                >
+                  <span className="flex items-center gap-1.5 text-blue-900">
+                    <MessageSquare className="w-3.5 h-3.5 text-amber-500" />
+                    Customer Comments & Feedback ({feedbacks.length})
+                  </span>
+                  {isExpanded ? (
+                    <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                  )}
+                </button>
+
+                {/* Expanded Customer Feedback Drawer */}
+                {isExpanded && (
+                  <div className="bg-white rounded-xl p-3 border border-slate-200 space-y-2.5 animate-in slide-in-from-top-2 duration-150 text-xs">
+                    <div className="flex justify-between items-center border-b border-slate-100 pb-1.5">
+                      <span className="text-[10px] font-extrabold uppercase text-slate-500">
+                        Citizen Verified Comments
+                      </span>
+                      {dept.citizenRating && (
+                        <span className="text-[10px] font-bold text-blue-800 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                          Avg: {dept.citizenRating} ⭐
+                        </span>
+                      )}
+                    </div>
+
+                    {feedbacks.length === 0 ? (
+                      <p className="text-[11px] text-slate-400 py-2 text-center italic">
+                        No customer feedback or comments submitted yet for this department.
+                      </p>
+                    ) : (
+                      <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
+                        {feedbacks.map((fb, idx) => (
+                          <div
+                            key={idx}
+                            className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/80 space-y-1"
+                          >
+                            <div className="flex justify-between items-start gap-2">
+                              <div className="flex items-center gap-1">
+                                <span className="font-extrabold text-[11px] text-slate-800">
+                                  {fb.citizenName}
+                                </span>
+                                <span className="text-[9.5px] text-slate-400">
+                                  ({fb.complaintId})
+                                </span>
+                              </div>
+                              <div className="flex items-center text-amber-500">
+                                {[1, 2, 3, 4, 5].map((s) => (
+                                  <Star
+                                    key={s}
+                                    className={`w-3 h-3 ${
+                                      s <= fb.rating
+                                        ? "fill-amber-400 text-amber-500"
+                                        : "text-slate-300"
+                                    }`}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+
+                            <p className="text-[11px] text-slate-600 italic">
+                              "{fb.comment || "Resolution verified by citizen."}"
+                            </p>
+
+                            <div className="flex justify-between items-center pt-1 text-[9.5px] text-slate-400">
+                              <span
+                                className={`font-bold px-1.5 py-0.5 rounded ${
+                                  fb.citizenVerified === "Yes"
+                                    ? "bg-emerald-100 text-emerald-800"
+                                    : fb.citizenVerified === "No"
+                                    ? "bg-red-100 text-red-800"
+                                    : "bg-slate-100 text-slate-700"
+                                }`}
+                              >
+                                {fb.citizenVerified === "Yes"
+                                  ? "✓ Resolved"
+                                  : fb.citizenVerified === "No"
+                                  ? "✕ Reopened"
+                                  : "Pending Verification"}
+                              </span>
+                              <span>
+                                {new Date(fb.verifiedDate).toLocaleDateString("en-IN")}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Footer Summary */}
+                <div className="flex justify-between items-center text-[11px] text-slate-500 font-bold border-t border-slate-200/80 pt-2.5">
+                  <span>Assigned: {dept.totalAssigned} Tickets</span>
+                  <span>Resolved: {dept.completed + dept.closed}</span>
                 </div>
               </div>
-
-              {/* Metrics Grid */}
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="bg-white p-2.5 rounded-xl border border-slate-200/70 space-y-0.5">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">SLA Compliance</span>
-                  <p className="font-extrabold text-emerald-700 text-base">{dept.slaCompliancePercent}%</p>
-                </div>
-
-                <div className="bg-white p-2.5 rounded-xl border border-slate-200/70 space-y-0.5">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Avg Speed</span>
-                  <p className="font-extrabold text-blue-900 text-base">{dept.avgResolutionDays} Days</p>
-                </div>
-
-                <div className="bg-white p-2.5 rounded-xl border border-slate-200/70 space-y-0.5">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Pending Tickets</span>
-                  <p className="font-extrabold text-amber-800 text-sm">{dept.pending} Tickets</p>
-                </div>
-
-                <div className="bg-white p-2.5 rounded-xl border border-slate-200/70 space-y-0.5">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Citizen Rating</span>
-                  <p className="font-extrabold text-amber-600 text-sm flex items-center gap-1">
-                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500" /> {dept.citizenRating} / 5.0
-                  </p>
-                </div>
-              </div>
-
-              {/* Footer Summary */}
-              <div className="flex justify-between items-center text-[11px] text-slate-500 font-bold border-t border-slate-200/80 pt-2.5">
-                <span>Assigned: {dept.totalAssigned} Tickets</span>
-                <span>Resolved: {dept.completed + dept.closed}</span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

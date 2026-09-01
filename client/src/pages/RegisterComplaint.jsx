@@ -81,53 +81,6 @@ const categories = [
     ]
   },
   {
-    title: "Parks & Environment",
-    description: "Fallen trees, park maintenance, overgrown grass, broken playground equipment.",
-    icon: "🌳",
-    defaultIssues: [
-      "Fallen Tree / Heavy Branch Removal",
-      "Park Equipment & Playground Repair",
-      "Overgrown Grass & Weed Trimming",
-      "Park Fence / Lighting Damage",
-      "Other Parks & Environment Issue"
-    ]
-  },
-  {
-    title: "Stray Animals & Pest Control",
-    description: "Stray dog hazards, cattle on road, mosquito fogging requests, pest infestations.",
-    icon: "🐕",
-    defaultIssues: [
-      "Stray Dog Aggression Hazard",
-      "Cattle Nuisance on Main Road",
-      "Mosquito Fogging Request",
-      "Pest & Rodent Infestation",
-      "Other Stray Animals & Pest Control Issue"
-    ]
-  },
-  {
-    title: "Public Property & Amenities",
-    description: "Damaged bus shelters, public toilet hygiene, vandalism, footpath encroachment.",
-    icon: "🏢",
-    defaultIssues: [
-      "Bus Shelter Damage",
-      "Public Toilet Maintenance & Sanitation",
-      "Vandalism of Public Property",
-      "Illegal Footpath Encroachment",
-      "Other Public Property & Amenities Issue"
-    ]
-  },
-  {
-    title: "Noise & Air Pollution",
-    description: "Loudspeakers, industrial noise, dust pollution from construction, garbage burning.",
-    icon: "🔊",
-    defaultIssues: [
-      "Illegal Loudspeaker / Industrial Noise",
-      "Dust Pollution from Construction",
-      "Open Burning of Garbage / Plastic",
-      "Other Noise & Air Pollution Issue"
-    ]
-  },
-  {
     title: "Public Health & Hygiene",
     description: "Unhygienic food stalls, stagnant water breeding grounds, illegal waste dumping.",
     icon: "🏥",
@@ -140,12 +93,27 @@ const categories = [
   },
   {
     title: "Other Civic Grievances",
-    description: "General municipal complaints, administrative inquiries, officer SLA delays.",
+    description: "General municipal complaints, administrative inquiries, stray animals, parks, public property amenities, noise pollution, officer SLA delays.",
     icon: "📦",
     defaultIssues: [
       "General Civic Complaint",
       "Municipal Administrative Inquiry",
       "Officer SLA Escalation Feedback",
+      "Stray Dog Aggression Hazard",
+      "Cattle Nuisance on Main Road",
+      "Mosquito Fogging Request",
+      "Pest & Rodent Infestation",
+      "Bus Shelter Damage",
+      "Public Toilet Maintenance & Sanitation",
+      "Vandalism of Public Property",
+      "Illegal Footpath Encroachment",
+      "Illegal Loudspeaker / Industrial Noise",
+      "Dust Pollution from Construction",
+      "Open Burning of Garbage / Plastic",
+      "Fallen Tree / Heavy Branch Removal",
+      "Park Equipment & Playground Repair",
+      "Overgrown Grass & Weed Trimming",
+      "Park Fence / Lighting Damage",
       "Other Uncategorized Civic Grievance"
     ]
   }
@@ -181,8 +149,19 @@ export default function RegisterComplaint() {
 
     // Combine default issues with dynamic backend issues and ensure 'Other [Category] Issue' is present
     const safeServices = Array.isArray(services) ? services : [];
+    const mergedCategoryNames = [
+      "Parks & Environment",
+      "Parks, Trees & Horticulture",
+      "Stray Animals & Pest Control",
+      "Public Safety & Animal Control",
+      "Public Property & Amenities",
+      "Town Planning & Building",
+      "Noise & Air Pollution",
+      "Other Civic Grievances"
+    ];
+
     const dynamicIssues = safeServices
-      .filter((s) => s && s.category === title)
+      .filter((s) => s && (s.category === title || (title === "Other Civic Grievances" && mergedCategoryNames.includes(s.category))))
       .map((s) => s.subcategory)
       .filter(Boolean);
 

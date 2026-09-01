@@ -121,37 +121,44 @@ export default function AdminDashboard() {
     );
   }
 
-  const handleUpdate = async () => {
+  const handleUpdate = async (customPayload = null) => {
     if (!selectedComplaint) return;
 
     try {
+      const payload = customPayload || { status };
       const res = await fetch(
         `http://localhost:8000/api/admin/complaints/${selectedComplaint._id}`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status }),
+          body: JSON.stringify(payload),
         }
       );
 
       const data = await res.json();
 
       if (data.success) {
-        alert("Complaint Status Updated & Email Notification Dispatched Successfully ✅");
-
         setComplaints((prev) =>
           prev.map((complaint) =>
             complaint._id === data.data._id ? data.data : complaint
           )
         );
 
-        setSelectedComplaint(null);
+        if (customPayload?.department || customPayload?.notifyAuthority) {
+          setSelectedComplaint(data.data);
+        } else {
+          alert("Complaint Status Updated & Email Notification Dispatched Successfully ✅");
+          setSelectedComplaint(null);
+        }
+        return { success: true, data: data.data };
       } else {
         alert(data.message || "Update Failed");
+        return { success: false };
       }
     } catch (err) {
       console.log(err);
       alert("Update Failed");
+      return { success: false };
     }
   };
 
@@ -205,29 +212,70 @@ export default function AdminDashboard() {
     {
       name: "Pending",
       value: safeComplaints.filter((c) => c?.status === "Pending").length,
+      fill: "#d97706",
     },
     {
       name: "Accepted",
       value: safeComplaints.filter((c) => c?.status === "Accepted").length,
+      fill: "#2563eb",
     },
     {
       name: "In Progress",
       value: safeComplaints.filter((c) => c?.status === "In Progress").length,
+      fill: "#6366f1",
     },
     {
       name: "Completed",
       value: safeComplaints.filter((c) => c?.status === "Completed").length,
+      fill: "#059669",
     },
-  ];
-
-  const COLORS = ["#d97706", "#2563eb", "#6366f1", "#059669"];
-
-  const monthlyData = [
     {
-      month: "Current Period",
-      complaints: safeComplaints.length,
+      name: "Closed",
+      value: safeComplaints.filter((c) => c?.status === "Closed" || c?.citizenVerified === "Yes").length,
+      fill: "#10b981",
+    },
+    {
+      name: "Reopened",
+      value: safeComplaints.filter((c) => c?.status === "Reopened").length,
+      fill: "#dc2626",
     },
   ];
+
+  const COLORS = ["#d97706", "#2563eb", "#6366f1", "#059669", "#10b981", "#dc2626"];
+
+  const highConfCount = safeComplaints.filter((c) => (c?.confidenceScore ?? 75) >= 80).length;
+  const medConfCount = safeComplaints.filter((c) => (c?.confidenceScore ?? 75) >= 50 && (c?.confidenceScore ?? 75) < 80).length;
+  const lowConfCount = safeComplaints.filter((c) => (c?.confidenceScore ?? 75) < 50).length;
+
+  const confidenceData = [
+    { name: "High Confidence (80%+)", value: highConfCount, fill: "#16a34a" },
+    { name: "Medium Confidence (50-79%)", value: medConfCount, fill: "#ea580c" },
+    { name: "Low Confidence (<50%)", value: lowConfCount, fill: "#dc2626" },
+  ];
+
+  // Dynamic monthly distribution
+  const monthMap = {};
+  safeComplaints.forEach((c) => {
+    const d = new Date(c.createdAt || Date.now());
+    const m = d.toLocaleString("en-US", { month: "short" });
+    monthMap[m] = (monthMap[m] || 0) + 1;
+  });
+
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const currentMonthIdx = new Date().getMonth();
+  const recentMonths = [];
+  for (let i = 4; i >= 0; i--) {
+    const idx = (currentMonthIdx - i + 12) % 12;
+    recentMonths.push(monthNames[idx]);
+  }
+
+  const monthlyData = recentMonths.map((m) => ({
+    month: m,
+    complaints: monthMap[m] || 0,
+  }));
+  if (monthlyData.every((m) => m.complaints === 0) && safeComplaints.length > 0) {
+    monthlyData[monthlyData.length - 1].complaints = safeComplaints.length;
+  }
 
   const departments = [
     ...new Set(
@@ -325,7 +373,7 @@ export default function AdminDashboard() {
           {/* Executive KPI Summary */}
           <DashboardCards complaints={complaints} />
 
-          {/* Phase 2: Department Performance Index */}
+          {/* Department Performance Index & Citizen Feedback */}
           <DepartmentPerformanceGrid />
 
           {/* Recharts Analytics */}
@@ -333,6 +381,8 @@ export default function AdminDashboard() {
             chartData={chartData}
             COLORS={COLORS}
             monthlyData={monthlyData}
+            confidenceData={confidenceData}
+            departmentData={departmentCounts}
           />
 
           {/* Urgent Action Required Panel */}

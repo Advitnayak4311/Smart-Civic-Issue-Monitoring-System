@@ -44,7 +44,7 @@ export const getPublicTransparencyStats = async (req, res) => {
       beforeImage: c.beforeImage || c.image || "",
       afterImage: c.afterImage || c.image || "",
       resolutionNotes: c.resolutionNotes || "Work inspected and verified by municipal team.",
-      citizenRating: c.citizenRating || 5,
+      citizenRating: c.citizenRating || null,
     }));
 
     return res.status(200).json({
@@ -135,25 +135,30 @@ export const submitComplaintFeedback = async (req, res) => {
 export const getResolutionGallery = async (req, res) => {
   try {
     const galleryItems = await Complaint.find({
-      status: { $in: ["Completed", "Closed"] },
+      status: { $in: ["Completed", "Closed", "In Progress", "Accepted"] },
     })
-      .select("complaintId category issue department status beforeImage afterImage image resolutionNotes completedAt citizenName ward")
-      .sort({ completedAt: -1 })
+      .select("complaintId category issue department status beforeImage afterImage imageUrl imageList image resolutionProof resolutionNotes completedAt citizenName ward address")
+      .sort({ updatedAt: -1, completedAt: -1, createdAt: -1 })
       .limit(20)
       .lean();
 
-    const gallery = galleryItems.map((item) => ({
-      _id: item._id,
-      complaintId: item.complaintId,
-      category: item.category,
-      issue: item.issue,
-      department: item.department,
-      beforeImage: item.beforeImage || item.image || "",
-      afterImage: item.afterImage || item.image || "",
-      resolutionNotes: item.resolutionNotes || "Work completed and verified by nodal inspection team.",
-      completedAt: item.completedAt || new Date(),
-      ward: item.ward || "Central Division",
-    }));
+    const gallery = galleryItems.map((item) => {
+      const primaryPhoto = item.imageUrl || (item.imageList && item.imageList.length > 0 ? item.imageList[0] : "") || item.image || "";
+      const secondaryPhoto = (item.imageList && item.imageList.length > 1 ? item.imageList[1] : "") || item.resolutionProof || item.afterImage || primaryPhoto;
+
+      return {
+        _id: item._id,
+        complaintId: item.complaintId,
+        category: item.category,
+        issue: item.issue,
+        department: item.department || "Municipal Division",
+        beforeImage: item.beforeImage || primaryPhoto,
+        afterImage: item.afterImage || item.resolutionProof || secondaryPhoto || primaryPhoto,
+        resolutionNotes: item.resolutionNotes || "Remediation verified by field inspection team.",
+        completedAt: item.completedAt || item.updatedAt || item.createdAt || new Date(),
+        ward: item.ward || "Central Division",
+      };
+    });
 
     return res.status(200).json({
       success: true,

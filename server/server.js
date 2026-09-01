@@ -25,9 +25,9 @@ const app = express();
 
 const PORT = process.env.PORT || 8000;
 
-// Body parser limits set to 100mb to support high-resolution photo & video evidence uploads
-app.use(express.json({ limit: "100mb" }));
-app.use(express.urlencoded({ limit: "100mb", extended: true }));
+// Body parser limits set to 500mb to support high-resolution photo & high-capacity video evidence uploads
+app.use(express.json({ limit: "500mb" }));
+app.use(express.urlencoded({ limit: "500mb", extended: true }));
 app.use(cookieParser());
 
 app.use(

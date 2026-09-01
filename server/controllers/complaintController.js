@@ -88,14 +88,207 @@ export const createComplaint = async (req, res) => {
 
     const complaintId = "CIV-" + Date.now().toString().slice(-8);
 
-    const service = await ServiceConfig.findOne({
+    // ----------------------------------------------------
+    // INTELLIGENT AUTOMATIC DEPARTMENT ROUTING ENGINE
+    // ----------------------------------------------------
+    const resolveAutoDepartment = (cat = "", iss = "") => {
+      const c = (cat || "").toLowerCase();
+      const i = (iss || "").toLowerCase();
+      const combined = `${c} ${i}`;
+
+      if (
+        combined.includes("pothole") ||
+        combined.includes("asphalt") ||
+        combined.includes("road damage") ||
+        combined.includes("road crack") ||
+        combined.includes("speed breaker") ||
+        combined.includes("highway") ||
+        combined.includes("tar road") ||
+        c.includes("road")
+      ) {
+        return "Roads & Highway Dept";
+      }
+
+      if (
+        combined.includes("footpath") ||
+        combined.includes("divider") ||
+        combined.includes("manhole") ||
+        combined.includes("bridge") ||
+        combined.includes("culvert") ||
+        combined.includes("pavement")
+      ) {
+        return "Public Works Dept (PWD)";
+      }
+
+      if (
+        combined.includes("drain") ||
+        combined.includes("sewage") ||
+        combined.includes("sewer") ||
+        combined.includes("stormwater") ||
+        combined.includes("waterlogg") ||
+        combined.includes("gutter") ||
+        combined.includes("open sewage") ||
+        c.includes("drain")
+      ) {
+        return "Drainage & Stormwater Division";
+      }
+
+      if (
+        combined.includes("water pipe") ||
+        combined.includes("water supply") ||
+        combined.includes("pipeline") ||
+        combined.includes("drinking water") ||
+        combined.includes("low pressure") ||
+        combined.includes("contaminated water") ||
+        combined.includes("no water") ||
+        c.includes("water")
+      ) {
+        return "Water Supply & Sewerage Board";
+      }
+
+      if (
+        combined.includes("transformer") ||
+        combined.includes("power grid") ||
+        combined.includes("high voltage")
+      ) {
+        return "Power Distribution & Grid Division";
+      }
+
+      if (
+        combined.includes("street light") ||
+        combined.includes("streetlight") ||
+        combined.includes("electric") ||
+        combined.includes("wire") ||
+        combined.includes("pole") ||
+        combined.includes("dark alley") ||
+        combined.includes("lighting") ||
+        c.includes("electric") ||
+        c.includes("light")
+      ) {
+        return "Electrical & Energy Dept";
+      }
+
+      if (
+        combined.includes("illegal dump") ||
+        combined.includes("black spot") ||
+        combined.includes("littering")
+      ) {
+        return "Enforcement & Anti-Littering Squad";
+      }
+
+      if (
+        combined.includes("garbage") ||
+        combined.includes("dustbin") ||
+        combined.includes("waste") ||
+        combined.includes("sweeping") ||
+        combined.includes("door-to-door") ||
+        combined.includes("sanitation") ||
+        combined.includes("trash") ||
+        c.includes("sanitation") ||
+        c.includes("garbage")
+      ) {
+        return "Sanitation & Waste Management";
+      }
+
+      if (
+        combined.includes("food vendor") ||
+        combined.includes("unhygienic") ||
+        combined.includes("stagnant") ||
+        combined.includes("mosquito") ||
+        combined.includes("hygiene") ||
+        combined.includes("public toilet") ||
+        c.includes("health") ||
+        c.includes("hygiene")
+      ) {
+        return "Public Health & Hygiene Dept";
+      }
+
+      if (
+        combined.includes("dog") ||
+        combined.includes("cattle") ||
+        combined.includes("stray") ||
+        combined.includes("animal") ||
+        combined.includes("veterinary")
+      ) {
+        return "Animal Husbandry & Veterinary Services";
+      }
+
+      if (
+        combined.includes("tree") ||
+        combined.includes("branch") ||
+        combined.includes("pruning") ||
+        combined.includes("forestry")
+      ) {
+        return "Emergency Forestry & Pruning Squad";
+      }
+
+      if (
+        combined.includes("park") ||
+        combined.includes("bench") ||
+        combined.includes("garden") ||
+        combined.includes("recreation")
+      ) {
+        return "Parks & Recreation Department";
+      }
+
+      if (
+        combined.includes("illegal construction") ||
+        combined.includes("encroachment") ||
+        combined.includes("building violation") ||
+        combined.includes("town planning")
+      ) {
+        return "Town Planning & Building Control";
+      }
+
+      if (
+        combined.includes("traffic signal") ||
+        combined.includes("traffic light") ||
+        combined.includes("signage")
+      ) {
+        return "Traffic Infrastructure & Signals Division";
+      }
+
+      return "General Department";
+    };
+
+    const resolveAutoPriority = (cat = "", iss = "") => {
+      const combined = `${cat} ${iss}`.toLowerCase();
+      if (
+        combined.includes("burst") ||
+        combined.includes("emergency") ||
+        combined.includes("sparking") ||
+        combined.includes("hazard") ||
+        combined.includes("overflow") ||
+        combined.includes("open sewage") ||
+        combined.includes("missing manhole") ||
+        combined.includes("dangerous") ||
+        combined.includes("pothole")
+      ) {
+        return "High";
+      }
+      return "Medium";
+    };
+
+    let service = await ServiceConfig.findOne({
       category,
       subcategory: issue,
       isActive: true,
     });
 
-    const priority = service?.priority || "Low";
-    const department = service?.department || "General Department";
+    if (!service) {
+      service = await ServiceConfig.findOne({
+        subcategory: new RegExp(issue.replace(/[\/\,\-]/g, ".*"), "i"),
+        isActive: true,
+      });
+    }
+
+    const autoDept = resolveAutoDepartment(category, issue);
+    const autoPriority = resolveAutoPriority(category, issue);
+
+    const priority = service?.priority || autoPriority;
+    const department = (service?.department && service.department !== "General Department")
+      ? service.department
+      : autoDept;
 
     let safeVideoUrl = videoUrl || null;
     let safeImageUrl = imageUrl || primaryImage || "";
@@ -420,7 +613,7 @@ export const getComplaintByToken = async (req, res) => {
 export const verifyComplaint = async (req, res) => {
   try {
     const { token } = req.params;
-    const { decision } = req.body;
+    const { decision, citizenComment, feedbackComments, citizenRating, reopenImages, reopenedReason } = req.body;
 
     const complaint = await Complaint.findOne({
       verificationToken: token,
@@ -432,6 +625,11 @@ export const verifyComplaint = async (req, res) => {
         message: "Invalid or expired verification link.",
       });
     }
+
+    const commentText = (citizenComment || feedbackComments || "").trim();
+    const ratingValue = Number(citizenRating) >= 1 && Number(citizenRating) <= 5
+      ? Number(citizenRating)
+      : (citizenRating ? Number(citizenRating) : null);
 
     if (complaint.citizenVerified !== "Pending") {
       return res.status(200).json({
@@ -445,15 +643,58 @@ export const verifyComplaint = async (req, res) => {
 
     if (decision === "yes") {
       complaint.citizenVerified = "Yes";
-      complaint.status = "Completed";
+      complaint.status = "Closed";
       complaint.closedAt = new Date();
     } else {
       complaint.citizenVerified = "No";
       complaint.status = "Reopened";
       complaint.priority = "High"; // Escalate SLA priority to High on citizen reopening!
       complaint.reopenedAt = new Date();
+
+      if (Array.isArray(reopenImages) && reopenImages.length > 0) {
+        complaint.reopenImages = reopenImages.slice(0, 5);
+        if (!Array.isArray(complaint.imageList)) {
+          complaint.imageList = complaint.imageUrl ? [complaint.imageUrl] : [];
+        }
+        reopenImages.slice(0, 5).forEach((img) => {
+          if (img && !complaint.imageList.includes(img)) {
+            complaint.imageList.push(img);
+          }
+        });
+      }
+
+      if (req.body.videoUrl || req.body.video) {
+        complaint.reopenVideo = req.body.videoUrl || req.body.video;
+        if (!complaint.videoUrl) {
+          complaint.videoUrl = req.body.videoUrl || req.body.video;
+        }
+      }
+
+      if (reopenedReason) {
+        complaint.reopenedReason = reopenedReason;
+      }
+    }
+
+    complaint.citizenComment = commentText;
+    complaint.feedbackComments = commentText;
+    if (ratingValue) {
+      complaint.citizenRating = ratingValue;
     }
     complaint.verificationDate = new Date();
+
+    // Add Timeline audit event
+    const imageCountNote = Array.isArray(reopenImages) && reopenImages.length > 0
+      ? ` (${reopenImages.length} Evidence Photo${reopenImages.length > 1 ? "s" : ""} Attached)`
+      : "";
+    const ratingNote = ratingValue ? `Rating: ${ratingValue}/5 Stars` : "Citizen feedback recorded";
+
+    complaint.timeline.push({
+      stage: `Citizen Verified: ${decision === "yes" ? "Work Confirmed & Satisfactory" : "Work Disputed & Reopened"}`,
+      timestamp: new Date(),
+      officer: `Citizen (${complaint.citizenName || "Resident"})`,
+      remarks: `${ratingNote}${commentText ? ` - Comment: "${commentText}"` : ""}${imageCountNote}`,
+      statusColor: decision === "yes" ? "emerald" : "red",
+    });
 
     await complaint.save();
 

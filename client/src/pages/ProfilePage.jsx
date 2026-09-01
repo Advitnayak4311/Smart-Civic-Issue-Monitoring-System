@@ -80,9 +80,102 @@ export default function ProfilePage() {
     profilePic: "",
   });
 
+  const [isDetectingLocation, setIsDetectingLocation] = useState(false);
+  const [locationStatus, setLocationStatus] = useState("");
+
   // Derived location dropdown options based on selected State & District
   const availableDistricts = INDIA_LOCATION_DATA[editForm.state] || [];
   const availableTaluks = getTaluksForDistrict(editForm.state, editForm.district);
+
+  // Live GPS Geolocation Detection for Citizen Profile
+  const detectLiveProfileLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser.");
+      return;
+    }
+
+    setIsDetectingLocation(true);
+    setLocationStatus("Accessing live GPS hardware...");
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude, accuracy } = position.coords;
+        setLocationStatus(`GPS coordinates: ${latitude.toFixed(4)}, ${longitude.toFixed(4)} (±${Math.round(accuracy)}m)`);
+
+        try {
+          // Real OpenStreetMap Reverse Geocoding
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
+            {
+              headers: {
+                "Accept-Language": "en",
+              },
+            }
+          );
+          const data = await response.json();
+          const addr = data.address || {};
+
+          const detectedState = addr.state || "Karnataka";
+          const detectedCity = addr.city || addr.town || addr.village || addr.suburb || addr.county || addr.state_district || "";
+          const detectedDistrict = addr.state_district || addr.county || addr.city || "";
+          const detectedSubDistrict = addr.suburb || addr.neighbourhood || addr.residential || addr.town || "";
+          const detectedPincode = addr.postcode || "";
+          const fullDisplayName = data.display_name || `Lat: ${latitude.toFixed(5)}, Lng: ${longitude.toFixed(5)}`;
+
+          // Find closest matching state from ALL_INDIAN_STATES
+          const matchedState = ALL_INDIAN_STATES.find(s => s.toLowerCase() === detectedState.toLowerCase()) ||
+                               ALL_INDIAN_STATES.find(s => detectedState.toLowerCase().includes(s.toLowerCase())) ||
+                               "Karnataka";
+
+          // Find closest matching district
+          const distList = INDIA_LOCATION_DATA[matchedState] || [];
+          let matchedDistrict = distList.find(d => d.toLowerCase() === detectedDistrict.toLowerCase() || detectedDistrict.toLowerCase().includes(d.toLowerCase())) ||
+                                distList.find(d => d.toLowerCase().includes(detectedCity.toLowerCase()) || detectedCity.toLowerCase().includes(d.toLowerCase())) ||
+                                distList[0] || "BENGALURU URBAN";
+
+          // Find closest matching taluk
+          const taluks = getTaluksForDistrict(matchedState, matchedDistrict);
+          let matchedTaluk = taluks.find(t => t.toLowerCase() === detectedSubDistrict.toLowerCase() || detectedSubDistrict.toLowerCase().includes(t.toLowerCase())) ||
+                             taluks[0] || "";
+
+          // Switch to edit mode so citizen can review and confirm/edit their address
+          setIsEditing(true);
+
+          setEditForm(prev => ({
+            ...prev,
+            state: matchedState,
+            district: matchedDistrict,
+            taluk: matchedTaluk,
+            pincode: detectedPincode || prev.pincode,
+            address: fullDisplayName, // Fully editable for user to refine without pretending!
+          }));
+
+          setLocationStatus(`✓ Live location mapped: ${detectedCity ? detectedCity + ", " : ""}${matchedState} (${detectedPincode || "GPS"})`);
+        } catch (geoErr) {
+          console.error("Reverse geocoding error:", geoErr);
+          setIsEditing(true);
+          setEditForm(prev => ({
+            ...prev,
+            address: prev.address || `GPS Coordinates: ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`,
+          }));
+          setLocationStatus(`✓ Live GPS Coords: ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
+        } finally {
+          setIsDetectingLocation(false);
+        }
+      },
+      (error) => {
+        console.error("Geolocation error:", error);
+        setIsDetectingLocation(false);
+        setLocationStatus("GPS access denied or unavailable. Please enter address manually.");
+        alert("GPS Location Access: " + (error.message || "Please allow location permission in your browser."));
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      }
+    );
+  };
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -396,9 +489,25 @@ export default function ProfilePage() {
 
                   {/* Location Details */}
                   <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                    <span className="text-[10px] font-bold uppercase text-slate-400 block flex items-center gap-1">
-                      <Compass className="w-3.5 h-3.5 text-blue-900" /> Location / Administrative Jurisdiction (Optional)
-                    </span>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-bold uppercase text-slate-400 block flex items-center gap-1">
+                        <Compass className="w-3.5 h-3.5 text-blue-900" /> Location / Administrative Jurisdiction (Optional)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={detectLiveProfileLocation}
+                        disabled={isDetectingLocation}
+                        className="text-[11px] font-bold text-blue-900 hover:text-blue-950 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg border border-blue-200 flex items-center gap-1 transition cursor-pointer"
+                        title="Auto-Detect Live GPS Location"
+                      >
+                        {isDetectingLocation ? (
+                          <RefreshCw className="w-3 h-3 animate-spin text-blue-800" />
+                        ) : (
+                          <MapPin className="w-3 h-3 text-amber-500" />
+                        )}
+                        <span>{isDetectingLocation ? "Detecting..." : "Auto-Detect GPS"}</span>
+                      </button>
+                    </div>
                     <div className="grid grid-cols-2 gap-2 text-xs font-semibold text-slate-700">
                       <div><span className="text-slate-400 block text-[10px]">State:</span> {user.state || "Karnataka"}</div>
                       <div><span className="text-slate-400 block text-[10px]">District:</span> {user.district || "BENGALURU URBAN"}</div>
@@ -472,9 +581,31 @@ export default function ProfilePage() {
 
                   {/* Optional Location Selectors (All India) */}
                   <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                    <h4 className="font-black text-slate-700 text-xs uppercase tracking-wider border-b border-slate-200 pb-1">
-                      Location / Region (Optional)
-                    </h4>
+                    <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
+                      <h4 className="font-black text-slate-700 text-xs uppercase tracking-wider">
+                        Location / Region (Optional)
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={detectLiveProfileLocation}
+                        disabled={isDetectingLocation}
+                        className="text-xs font-bold text-white bg-blue-900 hover:bg-blue-950 px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                      >
+                        {isDetectingLocation ? (
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-300" />
+                        ) : (
+                          <MapPin className="w-3.5 h-3.5 text-amber-300" />
+                        )}
+                        <span>{isDetectingLocation ? "Detecting GPS..." : "Auto-Detect Live Location"}</span>
+                      </button>
+                    </div>
+
+                    {locationStatus && (
+                      <div className="bg-blue-50 border border-blue-200 text-blue-900 px-3 py-1.5 rounded-lg text-[11px] font-semibold flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-blue-700 shrink-0" />
+                        <span>{locationStatus}</span>
+                      </div>
+                    )}
 
                     {/* State Selector */}
                     <div className="space-y-1">
@@ -548,7 +679,11 @@ export default function ProfilePage() {
                       {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 text-amber-300" />} Save Changes
                     </button>
                     <button
-                      onClick={() => setIsEditing(false)}
+                      onClick={() => {
+                        setEditForm({ ...user });
+                        setIsEditing(false);
+                        setLocationStatus("");
+                      }}
                       className="py-3 px-4 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl transition"
                     >
                       Cancel
@@ -656,7 +791,7 @@ export default function ProfilePage() {
                             <Eye className="w-3.5 h-3.5 text-blue-900" /> Inspect
                           </button>
                           <Link
-                            to={`/track`}
+                            to={`/track/${item.complaintId}`}
                             className="text-blue-700 hover:text-blue-900 font-bold underline text-[11px] flex items-center gap-1"
                           >
                             Track Live Timeline <ChevronRight className="w-3 h-3" />
@@ -720,7 +855,7 @@ export default function ProfilePage() {
             </div>
 
             <div className="flex justify-between items-center border-t border-slate-100 pt-4">
-              <Link to="/track" className="bg-blue-900 text-white font-bold text-xs px-4 py-2 rounded-xl hover:bg-blue-950 transition">
+              <Link to={`/track/${selectedComplaint.complaintId}`} className="bg-blue-900 text-white font-bold text-xs px-4 py-2 rounded-xl hover:bg-blue-950 transition">
                 Open SLA Track Page
               </Link>
               <button onClick={() => setSelectedComplaint(null)} className="bg-slate-200 text-slate-700 font-bold text-xs px-4 py-2 rounded-xl">

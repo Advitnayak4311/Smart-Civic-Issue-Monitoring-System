@@ -783,6 +783,7 @@ export default function ComplaintForm({ category, issue }) {
       }
 
       if (resData && resData.success && resData.complaintId) {
+        window.dispatchEvent(new CustomEvent("scms_complaint_registered", { detail: resData }));
         setComplaintId(resData.complaintId);
         setShowSuccess(true);
 

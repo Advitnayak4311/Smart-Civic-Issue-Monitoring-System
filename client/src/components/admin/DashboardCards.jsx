@@ -1,4 +1,4 @@
-import { FileText, Clock, CheckCircle2, ShieldAlert, Zap, ShieldCheck } from "lucide-react";
+import { FileText, Clock, CheckCircle2, ShieldAlert, ShieldCheck } from "lucide-react";
 
 export default function DashboardCards({ complaints }) {
   const safeComplaints = Array.isArray(complaints) ? complaints : [];
@@ -8,13 +8,12 @@ export default function DashboardCards({ complaints }) {
   const highPriority = safeComplaints.filter((c) => c?.priority === "High").length;
   
   // Phase 1 Intelligence Metrics
-  const criticalImpact = safeComplaints.filter((c) => (c?.impactScore ?? 0) >= 151 || c?.impactLevel === "Critical").length;
   const avgConfidence = total > 0
     ? Math.round(safeComplaints.reduce((sum, c) => sum + (c?.confidenceScore ?? 75), 0) / total)
     : 100;
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mt-6">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
       {/* Total Complaints */}
       <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex items-center justify-between">
         <div className="space-y-1">
@@ -36,18 +35,6 @@ export default function DashboardCards({ complaints }) {
         </div>
         <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center font-bold border border-amber-200">
           <Clock className="w-5 h-5" />
-        </div>
-      </div>
-
-      {/* Critical Impact Complaints */}
-      <div className="bg-white rounded-2xl border border-purple-200 p-4 shadow-xs flex items-center justify-between bg-gradient-to-br from-white to-purple-50/30">
-        <div className="space-y-1">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-purple-800">Critical Impact</p>
-          <h2 className="text-2xl font-extrabold text-purple-900">{criticalImpact}</h2>
-          <p className="text-[10px] text-purple-600 font-medium">High public importance</p>
-        </div>
-        <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-800 flex items-center justify-center font-bold border border-purple-300">
-          <Zap className="w-5 h-5" />
         </div>
       </div>
 

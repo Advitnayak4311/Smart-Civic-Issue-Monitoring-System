@@ -129,8 +129,7 @@ export const calculateImpactScore = (complaint) => {
 
   // Determine Level
   let level = "Low";
-  if (score >= 151) level = "Critical";
-  else if (score >= 101) level = "High";
+  if (score >= 101) level = "High";
   else if (score >= 51) level = "Medium";
 
   return { score, level };

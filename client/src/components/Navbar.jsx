@@ -71,12 +71,24 @@ export default function Navbar() {
   };
 
   const handleLogout = () => {
+    const isAdmin = userRole === "officer" || userRole === "superadmin" || isAdminContext;
     localStorage.removeItem("token");
     localStorage.removeItem("userRole");
     setToken(null);
     setUserRole(null);
-    alert("Logged out of government session.");
-    navigate("/login");
+    if (isAdmin) {
+      navigate("/admin-login");
+    } else {
+      navigate("/login");
+    }
+  };
+
+  const handleAdminLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("userRole");
+    setToken(null);
+    setUserRole(null);
+    navigate("/admin-login");
   };
 
   const isActive = (path) => location.pathname === path;
@@ -345,8 +357,8 @@ export default function Navbar() {
                   </span>
 
                   <button
-                    onClick={handleLogout}
-                    className="flex items-center gap-1.5 bg-slate-900 hover:bg-red-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg shadow-xs transition"
+                    onClick={handleAdminLogout}
+                    className="flex items-center gap-1.5 bg-slate-900 hover:bg-red-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg shadow-xs transition cursor-pointer"
                   >
                     <LogOut className="w-3.5 h-3.5 text-amber-400" /> End Admin Session
                   </button>

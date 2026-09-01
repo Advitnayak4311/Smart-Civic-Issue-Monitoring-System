@@ -265,9 +265,23 @@ reopenedAt: {
 
     citizenRating: {
       type: Number,
-      default: 5,
-      min: 1,
-      max: 5,
+      default: null,
+    },
+
+    citizenComment: {
+      type: String,
+      default: "",
+    },
+
+    reopenImages: [
+      {
+        type: String,
+      },
+    ],
+
+    reopenedReason: {
+      type: String,
+      default: "",
     },
 
     // ==========================================

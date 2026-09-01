@@ -138,14 +138,14 @@ const KNOWLEDGE_BASE = [
     label: "🐕 Stray Animals",
     keywords: ["stray", "dog", "animal", "rabies", "cattle", "monkey", "barking", "bite"],
     answer:
-      "Stray Animal Control & Vaccination drives are managed by the Animal Husbandry & Veterinary Department within 72 hours.",
+      "Stray Animal Control & Vaccination issues can be reported under 'Other Civic Grievances' and are managed by the Animal Husbandry & Veterinary Department within 72 hours.",
   },
   {
     id: "cat_trees",
     label: "🌳 Fallen Trees & Parks",
     keywords: ["tree", "branch", "park", "garden", "fallen tree", "horticulture", "cutting"],
     answer:
-      "Fallen Tree Blocking Roads or Overhanging Branches are cleared by the Forest & Horticulture Department under Emergency Clearance directives.",
+      "Fallen Trees, Park Maintenance, & Environmental issues can be reported under 'Other Civic Grievances' and are handled by the Forest & Horticulture Department.",
   },
 
   // --- SLA TIMELINES & PRIORITY ---

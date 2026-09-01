@@ -4,7 +4,6 @@ import Footer from "../components/Footer";
 import CivicHealthGauge from "../components/gis/CivicHealthGauge";
 import BeforeAfterGallery from "../components/engagement/BeforeAfterGallery";
 import MunicipalGisMap from "../components/gis/MunicipalGisMap";
-import CitizenLeaderboard from "../components/engagement/CitizenLeaderboard";
 import { ShieldCheck, Lock, Globe, FileText, CheckCircle2, Building2, Activity, Users } from "lucide-react";
 
 export default function PublicTransparencyPortal() {
@@ -12,12 +11,27 @@ export default function PublicTransparencyPortal() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchTransparencyStats();
+    fetchTransparencyStats(true);
+
+    // 3-Second Real-Time Live Polling Engine
+    const intervalId = setInterval(() => {
+      fetchTransparencyStats(false);
+    }, 3000);
+
+    const handleLiveEvent = () => fetchTransparencyStats(false);
+    window.addEventListener("scms_complaint_registered", handleLiveEvent);
+    window.addEventListener("storage", handleLiveEvent);
+
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener("scms_complaint_registered", handleLiveEvent);
+      window.removeEventListener("storage", handleLiveEvent);
+    };
   }, []);
 
-  const fetchTransparencyStats = async () => {
+  const fetchTransparencyStats = async (showLoading = false) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       const res = await fetch("http://localhost:8000/api/transparency/public-stats");
       const data = await res.json();
       if (data.success) {
@@ -26,7 +40,7 @@ export default function PublicTransparencyPortal() {
     } catch (err) {
       console.error("Fetch Transparency Stats Error:", err);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
@@ -110,9 +124,6 @@ export default function PublicTransparencyPortal() {
 
           {/* Public Municipal GIS Map */}
           <MunicipalGisMap />
-
-          {/* Top Citizen Leaderboard */}
-          <CitizenLeaderboard />
         </div>
       </div>
 

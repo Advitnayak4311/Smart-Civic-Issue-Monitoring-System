@@ -31,8 +31,10 @@ export const getGisComplaints = async (req, res) => {
 
     // Map into GIS GeoJSON-friendly marker objects with fallback GPS coordinates around city center
     const markers = complaints.map((c, idx) => {
-      const lat = c.location?.latitude || (12.9716 + (Math.sin(idx * 1.5) * 0.04));
-      const lng = c.location?.longitude || (77.5946 + (Math.cos(idx * 1.5) * 0.04));
+      const parsedLat = parseFloat(c.location?.latitude) || parseFloat(c.latitude);
+      const parsedLng = parseFloat(c.location?.longitude) || parseFloat(c.longitude);
+      const lat = !isNaN(parsedLat) && parsedLat !== 0 ? parsedLat : (12.9716 + (Math.sin(idx * 1.5) * 0.04));
+      const lng = !isNaN(parsedLng) && parsedLng !== 0 ? parsedLng : (77.5946 + (Math.cos(idx * 1.5) * 0.04));
 
       return {
         _id: c._id,
@@ -137,7 +139,10 @@ export const getWardRankings = async (req, res) => {
       else if (cat.includes("electric") || cat.includes("light")) w.lightingIssues++;
       else if (cat.includes("drain") || cat.includes("sewer")) w.drainageIssues++;
 
-      w.totalRating += c.citizenRating || 5;
+      if (c.citizenRating != null && Number(c.citizenRating) > 0) {
+        w.totalRating += Number(c.citizenRating);
+        w.ratedCount = (w.ratedCount || 0) + 1;
+      }
     });
 
     // Compute Weighted Civic Health Index for each Ward
@@ -174,7 +179,7 @@ export const getWardRankings = async (req, res) => {
         resolutionRate: Math.round((w.resolved / total) * 100),
         healthScore,
         healthLevel,
-        citizenRating: (w.totalRating / total).toFixed(1),
+        citizenRating: w.ratedCount > 0 ? (w.totalRating / w.ratedCount).toFixed(1) : null,
       };
     });
 

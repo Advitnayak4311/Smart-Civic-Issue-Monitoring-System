@@ -7,12 +7,27 @@ export default function CivicHealthGauge() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchHealthIndex();
+    fetchHealthIndex(true);
+
+    // 3-Second Real-Time Live Polling Engine
+    const intervalId = setInterval(() => {
+      fetchHealthIndex(false);
+    }, 3000);
+
+    const handleLiveEvent = () => fetchHealthIndex(false);
+    window.addEventListener("scms_complaint_registered", handleLiveEvent);
+    window.addEventListener("storage", handleLiveEvent);
+
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener("scms_complaint_registered", handleLiveEvent);
+      window.removeEventListener("storage", handleLiveEvent);
+    };
   }, []);
 
-  const fetchHealthIndex = async () => {
+  const fetchHealthIndex = async (showLoading = false) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       const res = await fetch("http://localhost:8000/api/gis/health-index");
       const data = await res.json();
       if (data.success) {
@@ -21,7 +36,7 @@ export default function CivicHealthGauge() {
     } catch (err) {
       console.error("Fetch Civic Health Index Error:", err);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 

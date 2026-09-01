@@ -27,8 +27,8 @@ export const getAllComplaints = async (req, res) => {
       citizenVerified: { $ne: "Yes" },
     };
 
-    if (filterImpact === "Critical") {
-      query.impactLevel = "Critical";
+    if (filterImpact && filterImpact !== "All") {
+      query.impactLevel = filterImpact;
     }
 
     if (filterHighlyReported === "true") {
@@ -84,10 +84,10 @@ export const updateComplaint = async (req, res) => {
     console.log("========== UPDATE API HIT ==========");
 
     const { id } = req.params;
-    const { status } = req.body;
+    const { status, department, transferRemarks, priority, notifyAuthority } = req.body;
 
     console.log("Complaint ID:", id);
-    console.log("New Status:", status);
+    console.log("New Status:", status, "Department:", department);
 
     // Get complaint first
     const complaint = await Complaint.findById(id);
@@ -99,62 +99,98 @@ export const updateComplaint = async (req, res) => {
       });
     }
 
-    // Update status & timestamps cleanly
-    complaint.status = status;
-
-    if (status === "In Progress" && !complaint.inProgressAt) {
-      complaint.inProgressAt = new Date();
-    }
-
-    if (status === "Completed") {
-      if (!complaint.completedAt) complaint.completedAt = new Date();
-      complaint.verificationToken = uuidv4();
-      complaint.citizenVerified = "Pending";
-      complaint.verificationDate = null;
-    }
-
-    if (status === "Reopened") {
-      complaint.priority = "High";
-      complaint.reopenedAt = new Date();
-    }
-
-    // Append Journey Timeline Entry (Never Overwrite)
+    const oldDept = complaint.department;
+    const isDeptTransferred = Boolean(department && department !== oldDept);
     const officerName = req.user?.name || "Municipal Response Officer";
-    let timelineStage = `Officer Updated Status: ${status}`;
-    let timelineColor = "blue";
 
-    if (status === "Accepted") {
-      timelineStage = "Officer Accepted Grievance";
-      timelineColor = "blue";
-    } else if (status === "In Progress") {
-      timelineStage = "Work Started & Site Inspection";
-      timelineColor = "amber";
-    } else if (status === "Completed") {
-      timelineStage = "Repair Completed & Verification Notice Dispatched";
-      timelineColor = "emerald";
-    } else if (status === "Reopened") {
-      timelineStage = "Grievance Reopened for Re-Inspection";
-      timelineColor = "red";
+    // Handle Department Transfer or Authority Dispatch
+    if (isDeptTransferred) {
+      complaint.department = department;
+      complaint.timeline.push({
+        stage: `Transferred & Dispatched to ${department}`,
+        timestamp: new Date(),
+        officer: officerName,
+        remarks: transferRemarks || `Grievance reassigned and transferred from ${oldDept || 'General Department'} to ${department}. Concerned departmental authority notified for immediate field action.`,
+        statusColor: "indigo",
+      });
+    } else if (notifyAuthority) {
+      complaint.timeline.push({
+        stage: `Official Dispatch Alert Sent to ${complaint.department}`,
+        timestamp: new Date(),
+        officer: officerName,
+        remarks: transferRemarks || `Urgent dispatch reminder and field action request sent to concerned ${complaint.department} supervisor.`,
+        statusColor: "indigo",
+      });
     }
 
-    complaint.timeline.push({
-      stage: timelineStage,
-      timestamp: new Date(),
-      officer: officerName,
-      remarks: req.body.remarks || `Status transitioned to ${status}`,
-      statusColor: timelineColor,
-    });
+    if (priority) {
+      complaint.priority = priority;
+    }
+
+    // Update status & timestamps cleanly
+    if (status) {
+      complaint.status = status;
+
+      if (status === "In Progress" && !complaint.inProgressAt) {
+        complaint.inProgressAt = new Date();
+      }
+
+      if (status === "Completed") {
+        if (!complaint.completedAt) complaint.completedAt = new Date();
+        complaint.verificationToken = uuidv4();
+        complaint.citizenVerified = "Pending";
+        complaint.verificationDate = null;
+      }
+
+      if (status === "Reopened") {
+        complaint.priority = "High";
+        complaint.reopenedAt = new Date();
+      }
+
+      // Append Journey Timeline Entry (Never Overwrite)
+      let timelineStage = `Officer Updated Status: ${status}`;
+      let timelineColor = "blue";
+
+      if (status === "Accepted") {
+        timelineStage = "Officer Accepted Grievance";
+        timelineColor = "blue";
+      } else if (status === "In Progress") {
+        timelineStage = "Work Started & Site Inspection";
+        timelineColor = "amber";
+      } else if (status === "Completed") {
+        timelineStage = "Repair Completed & Verification Notice Dispatched";
+        timelineColor = "emerald";
+      } else if (status === "Reopened") {
+        timelineStage = "Grievance Reopened for Re-Inspection";
+        timelineColor = "red";
+      }
+
+      if (req.body.remarks || !isDeptTransferred) {
+        complaint.timeline.push({
+          stage: timelineStage,
+          timestamp: new Date(),
+          officer: officerName,
+          remarks: req.body.remarks || `Status transitioned to ${status}`,
+          statusColor: timelineColor,
+        });
+      }
+    }
 
     await complaint.save();
 
-    console.log("Complaint Updated Successfully:", complaint.status);
+    console.log("Complaint Updated Successfully:", complaint.status, complaint.department);
 
     // --------------------
     // Send Email Notification for Selected Step
     // --------------------
     let emailData = null;
 
-    if (status === "In Progress") {
+    if (isDeptTransferred || notifyAuthority) {
+      emailData = {
+        subject: `📋 Departmental Dispatch: Grievance Ref #${complaint.complaintId} Transferred to ${complaint.department}`,
+        html: `<div style="font-family:Arial;padding:24px;background:#f8fafc;"><div style="max-width:550px;margin:auto;background:white;padding:24px;border-radius:12px;border:1px solid #e2e8f0;"><h3 style="color:#1e3a8a;margin-top:0;">Grievance Assigned to ${complaint.department}</h3><p>Dear <b>${complaint.citizenName}</b>,</p><p>Your grievance <b>${complaint.complaintId}</b> has been assigned and dispatched to <b>${complaint.department}</b>.</p><p style="background:#f1f5f9;padding:12px;border-radius:8px;font-size:13px;color:#334155;"><b>Department Action:</b> Concerned division authorities have been notified and prompt remediation action will be initiated.</p></div></div>`
+      };
+    } else if (status === "In Progress") {
       emailData = inProgressEmail(complaint);
     } else if (status === "Completed") {
       emailData = completedEmail(complaint);
@@ -223,6 +259,10 @@ export const trackComplaint = async (req, res) => {
         success: false,
         message: `Complaint reference '${cleanId}' was not found in the current active session database. If the server restarted, please submit a fresh complaint at /register to track it live.`,
       });
+    }
+
+    if (complaint.citizenVerified === "Pending") {
+      complaint.citizenRating = null;
     }
 
     return res.status(200).json({
@@ -431,7 +471,9 @@ export const getDepartmentPerformance = async (req, res) => {
           totalConfidence: 0,
           totalImpact: 0,
           totalRating: 0,
+          ratingCount: 0,
           escalatedCount: 0,
+          feedbackList: [],
         };
       }
 
@@ -448,7 +490,29 @@ export const getDepartmentPerformance = async (req, res) => {
 
       d.totalConfidence += c.confidenceScore || 75;
       d.totalImpact += c.impactScore || 45;
-      d.totalRating += c.citizenRating || 5;
+
+      // Only include feedback from verified or closed complaints where the citizen actually provided rating/feedback
+      const hasGenuineFeedback = (c.citizenVerified === "Yes" || c.citizenVerified === "No" || c.status === "Closed") &&
+                                 (c.citizenRating != null || (c.citizenComment && c.citizenComment.trim().length > 0) || (c.feedbackComments && c.feedbackComments.trim().length > 0));
+
+      if (hasGenuineFeedback) {
+        const ratingVal = Number(c.citizenRating) || (c.citizenVerified === "Yes" ? 5 : (c.citizenVerified === "No" ? 2 : null));
+        if (ratingVal) {
+          d.totalRating += ratingVal;
+          d.ratingCount++;
+        }
+
+        d.feedbackList.push({
+          complaintId: c.complaintId,
+          issue: c.issue,
+          category: c.category,
+          citizenName: c.citizenName || "Resident",
+          rating: ratingVal,
+          comment: c.citizenComment || c.feedbackComments || (c.citizenVerified === "Yes" ? "Work confirmed and verified successfully." : "Issue reported as incomplete/persisting."),
+          citizenVerified: c.citizenVerified || "Pending",
+          verifiedDate: c.verificationDate || c.updatedAt || c.createdAt,
+        });
+      }
 
       const isResolved = c.status === "Completed" || c.status === "Closed" || c.citizenVerified === "Yes";
       if (isResolved) {
@@ -472,7 +536,7 @@ export const getDepartmentPerformance = async (req, res) => {
       const resolutionRate = d.totalAssigned > 0 ? Math.round(((d.completed + d.closed) / d.totalAssigned) * 100) : 100;
       const slaCompliancePercent = d.totalResolved > 0 ? Math.round((d.resolvedWithinSla / d.totalResolved) * 100) : 100;
       const avgResolutionDays = d.totalResolved > 0 ? (d.totalResolutionDays / d.totalResolved).toFixed(1) : "1.8";
-      const citizenRating = d.totalAssigned > 0 ? (d.totalRating / d.totalAssigned).toFixed(1) : "4.8";
+      const citizenRating = d.ratingCount > 0 ? (d.totalRating / d.ratingCount).toFixed(1) : null;
 
       // Grade Formula
       let grade = "A+";
@@ -495,6 +559,8 @@ export const getDepartmentPerformance = async (req, res) => {
         slaCompliancePercent,
         avgResolutionDays,
         citizenRating,
+        feedbackCount: d.feedbackList.length,
+        feedbackList: d.feedbackList.sort((a, b) => new Date(b.verifiedDate) - new Date(a.verifiedDate)),
         grade,
         escalatedCount: d.escalatedCount,
         avgConfidence: Math.round(d.totalConfidence / Math.max(1, d.totalAssigned)),
