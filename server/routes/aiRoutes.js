@@ -5,9 +5,13 @@ import {
   getResourceAllocations,
   evaluateImageRepair,
   triggerEmergencyOverride,
+  getActiveEmergencies,
 } from "../controllers/aiController.js";
 
 const router = express.Router();
+
+// Phase 5: Active Emergencies
+router.get("/emergencies", getActiveEmergencies);
 
 // Phase 5: AI Officer Assistant NLP
 router.post("/assistant", queryOfficerAssistant);

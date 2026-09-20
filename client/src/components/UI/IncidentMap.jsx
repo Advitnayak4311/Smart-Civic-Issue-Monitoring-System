@@ -15,13 +15,13 @@ const defaultIcon = L.icon({
 });
 
 // Helper component to re-center map view when coordinates change
-function RecenterMap({ lat, lng }) {
+function RecenterMap({ lat, lng, hasCoords }) {
   const map = useMap();
   useEffect(() => {
-    if (lat && lng) {
-      map.setView([lat, lng], 15);
+    if (lat && lng && hasCoords) {
+      map.flyTo([lat, lng], 16, { animate: true, duration: 1.0 });
     }
-  }, [lat, lng, map]);
+  }, [lat, lng, hasCoords, map]);
   return null;
 }
 
@@ -31,6 +31,7 @@ function LocationMarker({ position, onLocationSelect, address }) {
     click(e) {
       if (onLocationSelect) {
         onLocationSelect(e.latlng.lat, e.latlng.lng);
+        map.flyTo([e.latlng.lat, e.latlng.lng], 16, { animate: true, duration: 0.8 });
       }
     },
   });
@@ -78,10 +79,10 @@ export default function IncidentMap({
 
   const hasCoords = !isNaN(parsedLat) && !isNaN(parsedLng) && parsedLat !== 0 && parsedLng !== 0;
 
-  // Localized municipal fallback center (Bengaluru: 12.9716, 77.5946) if exact GPS coords pending
+  // Center on valid coordinates, or default overview if not yet selected
   const centerLat = hasCoords ? parsedLat : 12.9716;
   const centerLng = hasCoords ? parsedLng : 77.5946;
-  const zoom = hasCoords ? 16 : 13;
+  const zoom = hasCoords ? 16 : 12;
 
   return (
     <div className="space-y-2">
@@ -93,7 +94,7 @@ export default function IncidentMap({
         </div>
 
         <div className="flex items-center gap-3">
-          {hasCoords && (
+          {hasCoords ? (
             <a
               href={`https://www.google.com/maps?q=${parsedLat},${parsedLng}`}
               target="_blank"
@@ -102,6 +103,8 @@ export default function IncidentMap({
             >
               Open in Google Maps <ExternalLink className="w-3 h-3" />
             </a>
+          ) : (
+            <span className="text-amber-300 text-[11px] font-medium">Pin not placed yet</span>
           )}
         </div>
       </div>
@@ -122,11 +125,11 @@ export default function IncidentMap({
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
-          <RecenterMap lat={centerLat} lng={centerLng} />
+          <RecenterMap lat={centerLat} lng={centerLng} hasCoords={hasCoords} />
 
           <LocationMarker
-            position={[centerLat, centerLng]}
-            onLocationSelect={onLocationSelect}
+            position={hasCoords ? [parsedLat, parsedLng] : null}
+            onLocationSelect={interactive ? onLocationSelect : null}
             address={address || "Selected Incident Spot"}
           />
         </MapContainer>
@@ -134,7 +137,9 @@ export default function IncidentMap({
 
       {interactive && onLocationSelect && (
         <p className="text-[11px] text-slate-600 font-medium text-center bg-slate-50 py-1.5 px-3 rounded-lg border border-slate-200">
-          📍 <strong>How to set location:</strong> Click anywhere on the map or drag the pin to mark the exact incident spot.
+          {hasCoords
+            ? `📍 Pinned at (${parsedLat.toFixed(5)}, ${parsedLng.toFixed(5)}). Drag pin or click elsewhere on the map to adjust.`
+            : "📍 Click anywhere on the map or use 'Detect Current GPS Location' to mark the incident spot."}
         </p>
       )}
     </div>

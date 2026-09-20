@@ -55,32 +55,42 @@ export default function ResourceAllocationCard() {
       </div>
 
       {/* Allocation Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {allocations.map((item, idx) => (
-          <div key={idx} className="bg-slate-50/70 border border-slate-200 p-4 rounded-2xl space-y-3">
-            <div className="flex justify-between items-center border-b border-slate-200/80 pb-2">
-              <h4 className="font-extrabold text-xs text-slate-900">{item.department}</h4>
-              <span className="text-[10px] font-black text-amber-800 bg-amber-100 px-2 py-0.5 rounded">
-                Pending: {item.pendingTickets}
-              </span>
-            </div>
-
-            <div className="space-y-1.5 text-xs">
-              <div className="flex items-center gap-2 text-slate-700">
-                <Users className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                <span className="font-bold">Workforce Recommendation:</span>
-                <span className="font-black text-blue-900">{item.recommendedWorkforce}</span>
+      {allocations.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {allocations.map((item, idx) => (
+            <div key={idx} className="bg-slate-50/70 border border-slate-200 p-4 rounded-2xl space-y-3">
+              <div className="flex justify-between items-center border-b border-slate-200/80 pb-2">
+                <h4 className="font-extrabold text-xs text-slate-900">{item.department}</h4>
+                <span className="text-[10px] font-black text-amber-800 bg-amber-100 px-2 py-0.5 rounded">
+                  Pending: {item.pendingTickets}
+                </span>
               </div>
 
-              <div className="flex items-center gap-2 text-slate-700">
-                <Truck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                <span className="font-bold">Equipment & Vehicles:</span>
-                <span className="font-black text-emerald-800">{item.recommendedEquipment}</span>
+              <div className="space-y-1.5 text-xs">
+                <div className="flex items-center gap-2 text-slate-700">
+                  <Users className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                  <span className="font-bold">Workforce Recommendation:</span>
+                  <span className="font-black text-blue-900">{item.recommendedWorkforce}</span>
+                </div>
+
+                <div className="flex items-center gap-2 text-slate-700">
+                  <Truck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span className="font-bold">Equipment & Vehicles:</span>
+                  <span className="font-black text-emerald-800">{item.recommendedEquipment}</span>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <div className="bg-slate-50 border border-slate-200 p-6 rounded-2xl text-center space-y-2">
+          <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto" />
+          <h4 className="font-extrabold text-xs text-slate-800">No Pending Ticket Backlog</h4>
+          <p className="text-slate-500 text-xs max-w-md mx-auto">
+            All municipal departments are currently operating within standard staffing thresholds with no backlogged tickets requiring emergency workforce redistribution.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

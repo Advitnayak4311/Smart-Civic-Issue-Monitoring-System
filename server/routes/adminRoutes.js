@@ -8,7 +8,6 @@ import {
   deleteComplaint,
   getAnalyticsStats,
   getDepartmentPerformance,
-  triggerEscalationsApi,
   clearAllComplaints,
   testEmailApi,
 } from "../controllers/adminController.js";
@@ -30,8 +29,6 @@ router.get("/analytics", getAnalyticsStats);
 // Phase 2: Department Performance Index
 router.get("/department-performance", getDepartmentPerformance);
 
-// Phase 2: Trigger Automatic Escalations
-router.post("/escalations/trigger", triggerEscalationsApi);
 
 // Get closed complaints
 router.get("/complaints/closed", getClosedComplaints);

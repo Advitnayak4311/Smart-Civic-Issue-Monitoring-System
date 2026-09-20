@@ -42,6 +42,16 @@ const complaintSchema = new mongoose.Schema(
       address: String,
     },
 
+    latitude: {
+      type: Number,
+      index: true,
+    },
+
+    longitude: {
+      type: Number,
+      index: true,
+    },
+
     city: {
       type: String,
     },
@@ -195,17 +205,6 @@ reopenedAt: {
       },
     ],
 
-    confidenceScore: {
-      type: Number,
-      default: 0,
-      index: true,
-    },
-
-    confidenceLevel: {
-      type: String,
-      enum: ["High", "Medium", "Low"],
-      default: "Low",
-    },
 
     impactScore: {
       type: Number,
@@ -389,7 +388,6 @@ complaintSchema.index({ category: 1, issue: 1, status: 1 });
 complaintSchema.index({ "location.latitude": 1, "location.longitude": 1 });
 complaintSchema.index({ supportCount: -1 });
 complaintSchema.index({ impactScore: -1 });
-complaintSchema.index({ confidenceScore: -1 });
 complaintSchema.index({ escalationLevel: -1 });
 complaintSchema.index({ department: 1, status: 1 });
 complaintSchema.index({ isEmergency: -1 });

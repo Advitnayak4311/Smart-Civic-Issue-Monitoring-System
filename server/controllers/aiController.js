@@ -111,3 +111,23 @@ export const triggerEmergencyOverride = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// 6. Active Emergencies API
+export const getActiveEmergencies = async (req, res) => {
+  try {
+    const emergencies = await Complaint.find({
+      isEmergency: true,
+      status: { $nin: ["Closed", "Resolved", "Completed"] },
+    }).lean();
+
+    return res.status(200).json({
+      success: true,
+      count: emergencies.length,
+      emergencies,
+    });
+  } catch (error) {
+    console.error("Emergencies Error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+

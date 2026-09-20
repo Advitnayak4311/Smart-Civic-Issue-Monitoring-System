@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
@@ -12,6 +13,25 @@ export default function AiCommandCenter() {
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
   const userRole = localStorage.getItem("userRole");
+  const [emergencyCount, setEmergencyCount] = useState(0);
+
+  useEffect(() => {
+    fetchActiveEmergencies();
+    const interval = setInterval(fetchActiveEmergencies, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchActiveEmergencies = async () => {
+    try {
+      const res = await fetch("http://localhost:8000/api/ai/emergencies");
+      const data = await res.json();
+      if (data.success && typeof data.count === "number") {
+        setEmergencyCount(data.count);
+      }
+    } catch (err) {
+      console.error("Fetch Active Emergencies Error:", err);
+    }
+  };
 
   // Strictly restrict AI Command Center to Authorized Municipal Officers
   const isOfficerOrAdmin = Boolean(token) && (userRole === "officer" || userRole === "superadmin" || userRole === "admin");
@@ -66,8 +86,8 @@ export default function AiCommandCenter() {
 
         {/* Command Center Body */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-          {/* Emergency Alert Banner */}
-          <EmergencyBanner emergencyCount={1} />
+          {/* Emergency Alert Banner - Dynamically shows only when true active emergencies exist */}
+          <EmergencyBanner emergencyCount={emergencyCount} />
 
           {/* AI Officer Assistant + Resource Allocation Row */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">

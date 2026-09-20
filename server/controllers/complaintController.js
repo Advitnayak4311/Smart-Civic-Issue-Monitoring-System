@@ -3,6 +3,7 @@ import ServiceConfig from "../models/ServiceConfig.js";
 import User from "../models/User.js";
 import cloudinary from "../config/cloudinary.js";
 import jwt from "jsonwebtoken";
+import dns from "dns/promises";
 import { sendEmail } from "../utils/sendEmail.js";
 import {
   complaintRegistrationCitizenEmail,
@@ -16,9 +17,117 @@ import {
 import { v4 as uuidv4 } from "uuid";
 import {
   calculateHaversineDistance,
-  calculateConfidenceScore,
   calculateImpactScore,
 } from "../utils/scoreCalculator.js";
+import { resolveCoordinates } from "../utils/geoCoder.js";
+
+// Recognized legitimate Top-Level Domain (TLD) extensions
+export const VALID_TLDS = new Set([
+  "com", "org", "net", "edu", "gov", "mil", "int", "in", "co", "io", "ai", "me", "info", "biz",
+  "app", "dev", "tech", "online", "site", "store", "xyz", "live", "global", "world", "cloud",
+  "agency", "cc", "tv", "ca", "uk", "us", "eu", "de", "fr", "au", "jp", "sg", "my", "nz"
+]);
+
+export const COMPOUND_TLDS = new Set([
+  "co.in", "gov.in", "nic.in", "ac.in", "edu.in", "res.in", "org.in", "net.in",
+  "co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "gov.au", "edu.au"
+]);
+
+// Common domain typos and auto-suggestions
+export const COMMON_TYPOS = {
+  "gmail.vom": "gmail.com",
+  "gmail.con": "gmail.com",
+  "gmail.cpm": "gmail.com",
+  "gmail.co": "gmail.com",
+  "gail.com": "gmail.com",
+  "gamil.com": "gmail.com",
+  "gmial.com": "gmail.com",
+  "gmai.com": "gmail.com",
+  "gmaill.com": "gmail.com",
+  "gmeil.com": "gmail.com",
+  "yahoo.vom": "yahoo.com",
+  "yahoo.con": "yahoo.com",
+  "yaho.com": "yahoo.com",
+  "ymail.vom": "ymail.com",
+  "outlook.vom": "outlook.com",
+  "outlok.com": "outlook.com",
+  "hotmial.com": "hotmail.com",
+  "hotmai.com": "hotmail.com",
+  "hotmail.vom": "hotmail.com",
+  "icloud.vom": "icloud.com"
+};
+
+// Comprehensive email validation with syntax, TLD, typo, consonant mash, and DNS MX checks
+export const validateEmailComprehensive = async (emailStr) => {
+  if (!emailStr || typeof emailStr !== "string") {
+    return { valid: false, message: "Email address is required." };
+  }
+
+  const email = emailStr.trim().toLowerCase();
+
+  // Basic RFC pattern
+  const basicRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  if (!basicRegex.test(email)) {
+    return { valid: false, message: "Invalid email format. Please provide a valid email (e.g. name@domain.com)." };
+  }
+
+  const [localPart, domain] = email.split("@");
+
+  if (!localPart || localPart.length < 2) {
+    return { valid: false, message: "Email username is too short." };
+  }
+
+  // Detect pure consonant gibberish (e.g. "hgfhggh", "dfghjkl")
+  const cleanedLocal = localPart.replace(/[^a-z]/g, "");
+  if (cleanedLocal.length >= 5 && !/[aeiouy]/.test(cleanedLocal)) {
+    return {
+      valid: false,
+      message: "Email username appears to be random keyboard characters. Please provide a genuine email address."
+    };
+  }
+
+  // Check known typo mapping
+  if (COMMON_TYPOS[domain]) {
+    const suggested = `${localPart}@${COMMON_TYPOS[domain]}`;
+    return {
+      valid: false,
+      suggestion: suggested,
+      suggestedDomain: COMMON_TYPOS[domain],
+      message: `Invalid email domain '@${domain}'. Did you mean @${COMMON_TYPOS[domain]}?`
+    };
+  }
+
+  // Extract TLD
+  const parts = domain.split(".");
+  const tld = parts[parts.length - 1];
+  const compoundTld = parts.slice(-2).join(".");
+
+  const isValidTld = COMPOUND_TLDS.has(compoundTld) || VALID_TLDS.has(tld);
+  if (!isValidTld) {
+    return {
+      valid: false,
+      message: `The domain extension '.${tld}' is not recognized. Please provide a valid email domain (e.g. @gmail.com).`
+    };
+  }
+
+  // DNS MX Record Verification (verifies domain exists and accepts emails)
+  try {
+    const mxRecords = await dns.resolveMx(domain);
+    if (!mxRecords || mxRecords.length === 0) {
+      return {
+        valid: false,
+        message: `Email domain '@${domain}' does not have active mail servers to receive emails.`
+      };
+    }
+  } catch (dnsErr) {
+    return {
+      valid: false,
+      message: `Email domain '@${domain}' does not exist or cannot receive mail.`
+    };
+  }
+
+  return { valid: true, email, domain };
+};
 
 // =========================================
 // CREATE COMPLAINT
@@ -56,6 +165,37 @@ export const createComplaint = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Please fill all required fields and provide photo evidence.",
+      });
+    }
+
+    // 1. Strict Phone Validation (10 digits starting with 6, 7, 8, or 9)
+    const cleanPhone = (phone || "").toString().replace(/[\s-]/g, "").trim();
+    const phoneRegex = /^[6-9]\d{9}$/;
+    if (!phoneRegex.test(cleanPhone)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid phone number. Must be a valid 10-digit mobile number starting with 6, 7, 8, or 9.",
+      });
+    }
+
+    // 2. Strict Email Verification (RFC syntax, recognized TLD, typo detector, keyboard mash detection, and DNS MX verification)
+    const cleanEmail = (email || "").toString().trim().toLowerCase();
+    const emailCheck = await validateEmailComprehensive(cleanEmail);
+    if (!emailCheck.valid) {
+      return res.status(400).json({
+        success: false,
+        message: emailCheck.message,
+        suggestion: emailCheck.suggestion || null,
+        suggestedDomain: emailCheck.suggestedDomain || null,
+      });
+    }
+
+    // 3. Strict Remarks / Description Validation (Compulsory, min 10 characters)
+    const cleanRemarks = (remarks || "").toString().trim();
+    if (!cleanRemarks || cleanRemarks.length < 10) {
+      return res.status(400).json({
+        success: false,
+        message: "Complaint description is compulsory and must contain at least 10 characters.",
       });
     }
 
@@ -317,12 +457,30 @@ export const createComplaint = async (req, res) => {
     let parentId = req.body.parentComplaintId || null;
     let isDuplicate = Boolean(parentId);
 
+    // Resolve geographic coordinates dynamically from address/ward/city if missing
+    let finalLat = latitude ? parseFloat(latitude) : null;
+    let finalLng = longitude ? parseFloat(longitude) : null;
+
+    if (!finalLat || !finalLng || isNaN(finalLat) || isNaN(finalLng)) {
+      const resolved = await resolveCoordinates({
+        address,
+        ward,
+        city,
+        district,
+        state,
+      });
+      if (resolved && resolved.latitude && resolved.longitude) {
+        finalLat = resolved.latitude;
+        finalLng = resolved.longitude;
+      }
+    }
+
     const tempComplaintData = {
       imageUrl: safeImageUrl,
       imageList: safeImageList,
       location: {
-        latitude: latitude ? parseFloat(latitude) : null,
-        longitude: longitude ? parseFloat(longitude) : null,
+        latitude: finalLat,
+        longitude: finalLng,
         address,
       },
       address,
@@ -335,7 +493,6 @@ export const createComplaint = async (req, res) => {
       createdAt: new Date(),
     };
 
-    const confidence = calculateConfidenceScore(tempComplaintData);
     const impact = calculateImpactScore(tempComplaintData);
 
     const complaint = await Complaint.create({
@@ -349,9 +506,9 @@ export const createComplaint = async (req, res) => {
       priority,
 
       citizenName,
-      phone,
-      email,
-      remarks,
+      phone: cleanPhone,
+      email: cleanEmail,
+      remarks: cleanRemarks,
 
       city,
       state,
@@ -361,10 +518,13 @@ export const createComplaint = async (req, res) => {
       address,
 
       location: {
-        latitude: latitude ? parseFloat(latitude) : null,
-        longitude: longitude ? parseFloat(longitude) : null,
+        latitude: finalLat,
+        longitude: finalLng,
         address,
       },
+
+      latitude: finalLat,
+      longitude: finalLng,
 
       imageUrl: safeImageUrl,
       imageList: safeImageList,
@@ -373,8 +533,6 @@ export const createComplaint = async (req, res) => {
       status: "Pending",
 
       // Phase 1 Scores & Duplicate Metadata
-      confidenceScore: confidence.score,
-      confidenceLevel: confidence.level,
       impactScore: impact.score,
       impactLevel: impact.level,
       isDuplicate,
@@ -501,7 +659,7 @@ export const getMyComplaints = async (req, res) => {
 // =========================================
 export const updateComplaintStatus = async (req, res) => {
   try {
-    const { status } = req.body;
+    const { status, afterImage, resolutionProof, resolutionNotes } = req.body;
 
     const allowedStatus = [
       "Pending",
@@ -534,6 +692,21 @@ export const updateComplaintStatus = async (req, res) => {
     }
 
     complaint.status = status;
+
+    const resolvedAfter = afterImage || resolutionProof;
+    if (resolvedAfter) {
+      complaint.afterImage = resolvedAfter;
+      complaint.resolutionProof = resolvedAfter;
+      if (!Array.isArray(complaint.imageList)) {
+        complaint.imageList = complaint.imageUrl ? [complaint.imageUrl] : [];
+      }
+      if (!complaint.imageList.includes(resolvedAfter)) {
+        complaint.imageList.push(resolvedAfter);
+      }
+    }
+    if (resolutionNotes) {
+      complaint.resolutionNotes = resolutionNotes;
+    }
 
     if (status === "Completed") {
       complaint.verificationToken = uuidv4();
@@ -612,8 +785,20 @@ export const getComplaintByToken = async (req, res) => {
 // =========================================
 export const verifyComplaint = async (req, res) => {
   try {
-    const { token } = req.params;
-    const { decision, citizenComment, feedbackComments, citizenRating, reopenImages, reopenedReason } = req.body;
+    const {
+      token
+    } = req.params;
+    const {
+      decision,
+      citizenComment,
+      feedbackComments,
+      citizenRating,
+      reopenImages,
+      reopenedReason,
+      afterImage,
+      completionImage,
+      allowUpdate,
+    } = req.body;
 
     const complaint = await Complaint.findOne({
       verificationToken: token,
@@ -631,7 +816,8 @@ export const verifyComplaint = async (req, res) => {
       ? Number(citizenRating)
       : (citizenRating ? Number(citizenRating) : null);
 
-    if (complaint.citizenVerified !== "Pending") {
+    const isUpdateMode = Boolean(allowUpdate);
+    if (complaint.citizenVerified !== "Pending" && !isUpdateMode) {
       return res.status(200).json({
         success: true,
         alreadyProcessed: true,
@@ -645,6 +831,18 @@ export const verifyComplaint = async (req, res) => {
       complaint.citizenVerified = "Yes";
       complaint.status = "Closed";
       complaint.closedAt = new Date();
+
+      const resolvedAfterImg = afterImage || completionImage;
+      if (resolvedAfterImg) {
+        complaint.afterImage = resolvedAfterImg;
+        complaint.resolutionProof = resolvedAfterImg;
+        if (!Array.isArray(complaint.imageList)) {
+          complaint.imageList = complaint.imageUrl ? [complaint.imageUrl] : [];
+        }
+        if (!complaint.imageList.includes(resolvedAfterImg)) {
+          complaint.imageList.push(resolvedAfterImg);
+        }
+      }
     } else {
       complaint.citizenVerified = "No";
       complaint.status = "Reopened";
@@ -925,10 +1123,7 @@ export const supportComplaint = async (req, res) => {
 
     complaint.supportCount = (complaint.supportedBy.length || 0) + 1;
 
-    // Recalculate Confidence and Impact Scores
-    const confidence = calculateConfidenceScore(complaint);
-    complaint.confidenceScore = confidence.score;
-    complaint.confidenceLevel = confidence.level;
+    // Recalculate Impact Score
 
     const impact = calculateImpactScore(complaint);
     complaint.impactScore = impact.score;
@@ -943,14 +1138,36 @@ export const supportComplaint = async (req, res) => {
       supportCount: complaint.supportCount,
       impactScore: complaint.impactScore,
       impactLevel: complaint.impactLevel,
-      confidenceScore: complaint.confidenceScore,
-      confidenceLevel: complaint.confidenceLevel,
     });
   } catch (error) {
     console.error("Support Complaint Error:", error);
     return res.status(500).json({
       success: false,
       message: error.message,
+    });
+  }
+};
+
+// =========================================
+// REAL-TIME EMAIL DOMAIN VERIFICATION API
+// =========================================
+export const verifyEmailEndpoint = async (req, res) => {
+  try {
+    const email = req.query.email || req.body?.email;
+    if (!email) {
+      return res.status(400).json({
+        valid: false,
+        message: "Email parameter is required.",
+      });
+    }
+
+    const result = await validateEmailComprehensive(email);
+    return res.status(200).json(result);
+  } catch (err) {
+    console.error("Email verification error:", err);
+    return res.status(500).json({
+      valid: false,
+      message: "Unable to verify email domain at this time.",
     });
   }
 };

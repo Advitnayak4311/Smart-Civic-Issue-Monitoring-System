@@ -65,90 +65,31 @@ export default function ComplaintForm({ category, issue }) {
     remarks: "",
   });
 
-  // Location State (Restored from localStorage on refresh to prevent IP-jump errors)
-  const [location, setLocation] = useState(() => {
-    try {
-      const saved = localStorage.getItem("scms_user_location");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed && typeof parsed === "object" && parsed.latitude && parsed.longitude) {
-          return {
-            latitude: parsed.latitude,
-            longitude: parsed.longitude,
-            address: parsed.address || "",
-            city: parsed.city || "",
-            state: parsed.state || "",
-            pincode: parsed.pincode || "",
-            country: parsed.country || "",
-          };
-        }
-      }
-    } catch (e) {
-      console.log("Error reading stored location:", e);
-    }
-    return {
-      latitude: "",
-      longitude: "",
-      address: "",
-      city: "",
-      state: "",
-      pincode: "",
-      country: "",
-    };
+  // Location State (Clean state per complaint, preventing stale coordinates)
+  const [location, setLocation] = useState({
+    latitude: "",
+    longitude: "",
+    address: "",
+    city: "",
+    state: "",
+    pincode: "",
+    country: "",
   });
 
-  const [locationSource, setLocationSource] = useState(() => {
-    try {
-      const saved = localStorage.getItem("scms_user_location");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed && typeof parsed === "object" && parsed.locationSource) return parsed.locationSource;
-      }
-    } catch (e) {}
-    return "";
-  });
-
+  const [locationSource, setLocationSource] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
   const [isSearchingLocation, setIsSearchingLocation] = useState(false);
   const [locationError, setLocationError] = useState("");
+  const [pinNotification, setPinNotification] = useState(null); // { type: 'success' | 'info' | 'error', message: string }
+  const [emailVerification, setEmailVerification] = useState({
+    status: "idle", // 'idle' | 'checking' | 'valid' | 'invalid'
+    message: "",
+    suggestion: null,
+  });
+  const emailDebounceRef = useRef(null);
 
-  // Restore saved jurisdiction options from localStorage if available
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("scms_user_location");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.selectedState) setSelectedState(parsed.selectedState);
-        if (parsed.selectedDistrict) setSelectedDistrict(parsed.selectedDistrict);
-        if (parsed.selectedZone) setSelectedZone(parsed.selectedZone);
-        if (parsed.selectedWardName) setSelectedWardName(parsed.selectedWardName);
-      }
-    } catch (e) {}
-  }, []);
-
-  // Persist location & jurisdiction changes to localStorage permanently
-  useEffect(() => {
-    if (location.latitude && location.longitude) {
-      try {
-        localStorage.setItem(
-          "scms_user_location",
-          JSON.stringify({
-            ...location,
-            selectedState,
-            selectedDistrict,
-            selectedZone,
-            selectedWardName,
-            locationSource,
-          })
-        );
-      } catch (e) {
-        console.log("Error persisting location:", e);
-      }
-    }
-  }, [location, selectedState, selectedDistrict, selectedZone, selectedWardName, locationSource]);
-
-  // Function to clear saved location manually
+  // Function to clear location manually
   const clearSavedLocation = () => {
     try {
       localStorage.removeItem("scms_user_location");
@@ -164,8 +105,120 @@ export default function ComplaintForm({ category, issue }) {
     });
     setLocationSource("");
     setLocationError("");
+    setPinNotification(null);
     setSearchQuery("");
   };
+
+  // Helper to jump map and location coordinates to selected district / city (only if pin not placed yet)
+  const jumpToDistrictOrWard = async (distName, wardName = "", stateName = "") => {
+    if (location.latitude && location.longitude) {
+      // Keep user's exact pinned coordinates intact
+      return;
+    }
+    const cleanDist = (distName || "").replace(/\([^)]*\)/g, "").trim();
+    const query = [wardName, cleanDist, stateName || selectedState || "Karnataka", "India"].filter(Boolean).join(", ");
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`,
+        { headers: { "Accept-Language": "en" } }
+      );
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        const lat = parseFloat(data[0].lat);
+        const lon = parseFloat(data[0].lon);
+        setLocation((prev) => ({
+          ...prev,
+          latitude: lat,
+          longitude: lon,
+          city: cleanDist,
+          state: stateName || selectedState || prev.state,
+        }));
+        setLocationSource("manual-map");
+      }
+    } catch (e) {
+      console.log("Jump district note:", e);
+    }
+  };
+
+  // Helper to geocode address text directly to coordinates with multi-tier fallback & visual feedback
+  const geocodeAddressText = async (addressOverride) => {
+    const textToGeocode = (addressOverride !== undefined ? addressOverride : location.address).trim();
+    if (!textToGeocode) {
+      setPinNotification({
+        type: "error",
+        message: "Please type a street name, landmark, or address first, then click 'Pin Address on Map'.",
+      });
+      return;
+    }
+
+    const cleanDist = (selectedDistrict || "").replace(/\([^)]*\)/g, "").trim();
+
+    // Cascading address queries: prioritize exact user text first
+    const queryCandidates = [
+      textToGeocode,
+      `${textToGeocode}, India`,
+      `${textToGeocode}, ${cleanDist}, India`,
+      `${textToGeocode}, ${selectedState}, India`,
+      `${textToGeocode}, ${cleanDist}, ${selectedState}, India`,
+    ];
+
+    try {
+      setIsSearchingLocation(true);
+      setPinNotification(null);
+      let foundCoords = null;
+
+      for (const query of queryCandidates) {
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`,
+            { headers: { "Accept-Language": "en" } }
+          );
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            foundCoords = {
+              lat: parseFloat(data[0].lat),
+              lon: parseFloat(data[0].lon),
+              displayName: data[0].display_name,
+            };
+            break;
+          }
+        } catch (subErr) {
+          console.log("Candidate geocode note:", query, subErr);
+        }
+      }
+
+      if (foundCoords) {
+        setLocation((prev) => ({
+          ...prev,
+          latitude: foundCoords.lat,
+          longitude: foundCoords.lon,
+          address: textToGeocode,
+        }));
+        setLocationSource("address");
+        setLocationError("");
+        setPinNotification({
+          type: "success",
+          message: `Location successfully pinned on map at (${foundCoords.lat.toFixed(5)}, ${foundCoords.lon.toFixed(5)})!`,
+        });
+        // Resolve jurisdiction from real coordinates
+        await fetchAddressFromCoords(foundCoords.lat, foundCoords.lon);
+      } else {
+        setPinNotification({
+          type: "error",
+          message: `Could not locate "${textToGeocode}". Please check the spelling, add city/area name, or click directly on the map.`,
+        });
+      }
+    } catch (e) {
+      console.log("Geocode address note:", e);
+      setPinNotification({
+        type: "error",
+        message: "Network error reaching map geocoder. You can click directly on the map to set the pin.",
+      });
+    } finally {
+      setIsSearchingLocation(false);
+    }
+  };
+
 
   // UI / Loading State
   const [loading, setLoading] = useState(false);
@@ -442,11 +495,171 @@ export default function ComplaintForm({ category, issue }) {
     stopCamera();
   };
 
+  const COMMON_EMAIL_TYPOS = {
+    "gmail.vom": "gmail.com",
+    "gmail.con": "gmail.com",
+    "gmail.cpm": "gmail.com",
+    "gmail.co": "gmail.com",
+    "gail.com": "gmail.com",
+    "gamil.com": "gmail.com",
+    "gmial.com": "gmail.com",
+    "gmai.com": "gmail.com",
+    "gmaill.com": "gmail.com",
+    "gmeil.com": "gmail.com",
+    "yahoo.vom": "yahoo.com",
+    "yahoo.con": "yahoo.com",
+    "yaho.com": "yahoo.com",
+    "ymail.vom": "ymail.com",
+    "outlook.vom": "outlook.com",
+    "outlok.com": "outlook.com",
+    "hotmial.com": "hotmail.com",
+    "hotmai.com": "hotmail.com",
+    "hotmail.vom": "hotmail.com",
+    "icloud.vom": "icloud.com"
+  };
+
+  const VALID_TLDS_CLIENT = new Set([
+    "com", "org", "net", "edu", "gov", "mil", "int", "in", "co", "io", "ai", "me", "info", "biz",
+    "app", "dev", "tech", "online", "site", "store", "xyz", "live", "global", "world", "cloud",
+    "agency", "cc", "tv", "ca", "uk", "us", "eu", "de", "fr", "au", "jp", "sg", "my", "nz"
+  ]);
+
+  const COMPOUND_TLDS_CLIENT = new Set([
+    "co.in", "gov.in", "nic.in", "ac.in", "edu.in", "res.in", "org.in", "net.in",
+    "co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "gov.au", "edu.au"
+  ]);
+
+  const verifyEmailInput = async (emailRaw, checkDns = true) => {
+    const email = (emailRaw || "").trim().toLowerCase();
+    if (!email) {
+      setEmailVerification({ status: "idle", message: "", suggestion: null });
+      return { valid: false, message: "Email address is required." };
+    }
+
+    if (!email.includes("@")) {
+      setEmailVerification({
+        status: "invalid",
+        message: "Email must include '@' symbol (e.g. name@domain.com).",
+        suggestion: null,
+      });
+      return { valid: false, message: "Email must include '@'." };
+    }
+
+    const [localPart, domain] = email.split("@");
+
+    if (!localPart || localPart.length < 2) {
+      setEmailVerification({
+        status: "invalid",
+        message: "Email username before '@' is too short.",
+        suggestion: null,
+      });
+      return { valid: false, message: "Email username is too short." };
+    }
+
+    // Gibberish keyboard mash detection (e.g. hgfhggh, asdfghjk)
+    const cleanedLocal = localPart.replace(/[^a-z]/g, "");
+    if (cleanedLocal.length >= 5 && !/[aeiouy]/.test(cleanedLocal)) {
+      setEmailVerification({
+        status: "invalid",
+        message: `Username '${localPart}' appears to be random keyboard letters. Please enter your real email address.`,
+        suggestion: null,
+      });
+      return { valid: false, message: "Username appears to be random keys." };
+    }
+
+    if (!domain || !domain.includes(".")) {
+      setEmailVerification({
+        status: "invalid",
+        message: "Incomplete domain. Please enter full domain (e.g. gmail.com).",
+        suggestion: null,
+      });
+      return { valid: false, message: "Incomplete domain name." };
+    }
+
+    // Known typo matching
+    if (COMMON_EMAIL_TYPOS[domain]) {
+      const suggested = `${localPart}@${COMMON_EMAIL_TYPOS[domain]}`;
+      setEmailVerification({
+        status: "invalid",
+        message: `Invalid domain '@${domain}'. Did you mean @${COMMON_EMAIL_TYPOS[domain]}?`,
+        suggestion: suggested,
+      });
+      return { valid: false, message: `Typo: Did you mean @${COMMON_EMAIL_TYPOS[domain]}?`, suggestion: suggested };
+    }
+
+    // TLD checking
+    const parts = domain.split(".");
+    const tld = parts[parts.length - 1];
+    const compoundTld = parts.slice(-2).join(".");
+    const isKnownTld = COMPOUND_TLDS_CLIENT.has(compoundTld) || VALID_TLDS_CLIENT.has(tld);
+
+    if (!isKnownTld) {
+      setEmailVerification({
+        status: "invalid",
+        message: `Domain extension '.${tld}' is not recognized. Please use a valid domain (e.g. @gmail.com).`,
+        suggestion: null,
+      });
+      return { valid: false, message: `Extension .${tld} is not recognized.` };
+    }
+
+    if (!checkDns) {
+      setEmailVerification({ status: "valid", message: "Email format is valid.", suggestion: null });
+      return { valid: true };
+    }
+
+    // Query backend DNS MX resolver
+    try {
+      setEmailVerification((prev) => ({ ...prev, status: "checking", message: "Verifying mail domain..." }));
+      const res = await fetch(`http://localhost:8000/api/complaint/verify-email?email=${encodeURIComponent(email)}`);
+      const data = await res.json();
+      if (!data.valid) {
+        setEmailVerification({
+          status: "invalid",
+          message: data.message || `Domain '@${domain}' does not exist or cannot receive mail.`,
+          suggestion: data.suggestion || null,
+        });
+        return { valid: false, message: data.message, suggestion: data.suggestion };
+      } else {
+        setEmailVerification({
+          status: "valid",
+          message: `Verified: '@${domain}' is active and ready for status updates.`,
+          suggestion: null,
+        });
+        return { valid: true };
+      }
+    } catch (e) {
+      setEmailVerification({ status: "valid", message: "Email format is valid.", suggestion: null });
+      return { valid: true };
+    }
+  };
+
+  const applyEmailSuggestion = (suggestedEmail) => {
+    setFormData((prev) => ({ ...prev, email: suggestedEmail }));
+    verifyEmailInput(suggestedEmail, true);
+  };
+
+  const handleEmailChange = (val) => {
+    verifyEmailInput(val, false);
+    if (emailDebounceRef.current) {
+      clearTimeout(emailDebounceRef.current);
+    }
+    emailDebounceRef.current = setTimeout(() => {
+      if (val && val.includes("@") && val.includes(".")) {
+        verifyEmailInput(val, true);
+      }
+    }, 600);
+  };
+
   const handleChange = (e) => {
+    const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [e.target.name]: e.target.value,
+      [name]: value,
     }));
+
+    if (name === "email") {
+      handleEmailChange(value);
+    }
   };
 
   // Helper to reverse geocode lat & lng into full address and auto-map jurisdiction
@@ -463,24 +676,29 @@ export default function ComplaintForm({ category, issue }) {
       );
       const data = await response.json();
 
-      const detectedState = data.address?.state || "";
+      const addr = data.address || {};
+      const detectedState = addr.state || "";
       const detectedCity =
-        data.address?.city ||
-        data.address?.town ||
-        data.address?.village ||
-        data.address?.suburb ||
-        data.address?.county ||
-        data.address?.state_district ||
+        addr.city ||
+        addr.town ||
+        addr.village ||
+        addr.suburb ||
+        addr.county ||
+        addr.state_district ||
         "";
+
+      const road = addr.road || addr.pedestrian || addr.suburb || addr.neighbourhood || "";
+      const formattedParts = [road, detectedCity, detectedState, addr.postcode].filter(Boolean);
+      const cleanAddress = formattedParts.length > 0 ? formattedParts.join(", ") : data.display_name;
 
       setLocation({
         latitude,
         longitude,
-        address: data.display_name || `Coordinates: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+        address: cleanAddress || data.display_name || `Coordinates: ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`,
         city: detectedCity,
         state: detectedState,
-        pincode: data.address?.postcode || "",
-        country: data.address?.country || "",
+        pincode: addr.postcode || "",
+        country: addr.country || "India",
       });
 
       // Automatically map State, District/Corporation, Zone, and Ward!
@@ -493,7 +711,7 @@ export default function ComplaintForm({ category, issue }) {
         ...prev,
         latitude,
         longitude,
-        address: prev.address || `Coordinates: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+        address: prev.address || `Coordinates: ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`,
       }));
     }
   };
@@ -579,16 +797,17 @@ export default function ComplaintForm({ category, issue }) {
     setSelectedWardName(matchedWardName);
   };
 
-  // Detect GPS Location using HTML5 Geolocation API with IP Geolocation Fallback
+  // Detect GPS Location using HTML5 Geolocation API with resilient multi-provider fallback
   const detectLocation = (sourceType = "manual-gps") => {
+    setIsDetectingLocation(true);
+    setLocationError("");
+
     if (!navigator.geolocation) {
       fallbackIpLocation(sourceType);
       return;
     }
 
-    setIsDetectingLocation(true);
-    setLocationError("");
-
+    // Attempt 1: High Accuracy GPS (fast 5s timeout)
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const latitude = position.coords.latitude;
@@ -599,30 +818,90 @@ export default function ComplaintForm({ category, issue }) {
         await fetchAddressFromCoords(latitude, longitude);
         setIsDetectingLocation(false);
       },
-      async (error) => {
-        console.log("Geolocation API note, attempting IP fallback:", error.message);
-        await fallbackIpLocation(sourceType);
+      (firstError) => {
+        console.log("High-accuracy GPS note, attempting standard accuracy:", firstError.message);
+
+        // Attempt 2: Standard/Cached browser location (works seamlessly on desktop/WiFi)
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            const latitude = position.coords.latitude;
+            const longitude = position.coords.longitude;
+
+            setLocationSource(sourceType);
+            setLocationError("");
+            await fetchAddressFromCoords(latitude, longitude);
+            setIsDetectingLocation(false);
+          },
+          async (secondError) => {
+            console.log("Standard accuracy geolocation note, attempting IP fallback:", secondError.message);
+            await fallbackIpLocation(sourceType);
+          },
+          {
+            enableHighAccuracy: false,
+            timeout: 8000,
+            maximumAge: 60000,
+          }
+        );
       },
       {
         enableHighAccuracy: true,
-        timeout: 8000,
+        timeout: 5000,
         maximumAge: 0,
       }
     );
   };
 
-  // Fallback to IP Geolocation when GPS API is blocked or times out on desktop
+  // Fallback to resilient IP Geolocation when GPS hardware is restricted
   const fallbackIpLocation = async (sourceType = "manual-gps") => {
     try {
       setIsDetectingLocation(true);
-      const res = await fetch("https://ipapi.co/json/");
-      const data = await res.json();
-      if (data.latitude && data.longitude) {
+      let lat = null;
+      let lng = null;
+
+      // Provider 1: ipwho.is (Free, high reliability, no rate limits)
+      try {
+        const res = await fetch("https://ipwho.is/");
+        const data = await res.json();
+        if (data.success && data.latitude && data.longitude) {
+          lat = parseFloat(data.latitude);
+          lng = parseFloat(data.longitude);
+        }
+      } catch (e) {
+        console.log("ipwho.is note:", e);
+      }
+
+      // Provider 2: freeipapi.com
+      if (!lat || !lng) {
+        try {
+          const res = await fetch("https://freeipapi.com/api/json");
+          const data = await res.json();
+          if (data.latitude && data.longitude) {
+            lat = parseFloat(data.latitude);
+            lng = parseFloat(data.longitude);
+          }
+        } catch (e) {
+          console.log("freeipapi note:", e);
+        }
+      }
+
+      // Provider 3: ipapi.co
+      if (!lat || !lng) {
+        try {
+          const res = await fetch("https://ipapi.co/json/");
+          const data = await res.json();
+          if (data.latitude && data.longitude) {
+            lat = parseFloat(data.latitude);
+            lng = parseFloat(data.longitude);
+          }
+        } catch (e) {}
+      }
+
+      if (lat && lng) {
         setLocationSource(sourceType);
         setLocationError("");
-        await fetchAddressFromCoords(data.latitude, data.longitude);
+        await fetchAddressFromCoords(lat, lng);
       } else {
-        setLocationError("Location permission restricted. Please search your landmark/address above or click on the map to place your pin.");
+        setLocationError("Browser location restricted. Click anywhere on the map above or search your landmark to place your pin.");
       }
     } catch (ipErr) {
       console.log("IP Geolocation Note:", ipErr);
@@ -699,13 +978,44 @@ export default function ComplaintForm({ category, issue }) {
   const handleSubmit = async (parentComplaintId = null) => {
     const validParentId = typeof parentComplaintId === "string" ? parentComplaintId : null;
 
-    if (!formData.citizenName || !formData.phone || !formData.email || imageList.length === 0) {
-      alert("Please fill all required fields (Name, Phone, Email) and attach at least 1 photo evidence.");
+    // 1. Mandatory Citizen Name
+    if (!formData.citizenName || !formData.citizenName.trim()) {
+      alert("Please enter your full name.");
       return;
     }
 
-    if (!location.latitude && !location.address.trim()) {
-      alert("Please either click 'Detect GPS Location' or enter your location address manually.");
+    // 2. Strict Phone Validation (Mandatory 10-digit Indian Mobile Number)
+    const cleanPhone = (formData.phone || "").replace(/[\s-]/g, "").trim();
+    const phoneRegex = /^[6-9]\d{9}$/;
+    if (!cleanPhone || !phoneRegex.test(cleanPhone)) {
+      alert("Please enter a valid 10-digit mobile phone number starting with 6, 7, 8, or 9 (e.g. 9876543210).");
+      return;
+    }
+
+    // 3. Strict Email Verification (Syntax, TLD, Typo, Keyboard Mash, and DNS MX Verification)
+    const cleanEmail = (formData.email || "").trim();
+    const emailCheck = await verifyEmailInput(cleanEmail, true);
+    if (!emailCheck.valid) {
+      alert(emailCheck.message || "Please enter a valid, active email address.");
+      return;
+    }
+
+    // 4. Compulsory Complaint Description (Minimum 10 characters)
+    const cleanRemarks = (formData.remarks || "").trim();
+    if (!cleanRemarks || cleanRemarks.length < 10) {
+      alert("Complaint description is compulsory. Please write at least 10 characters explaining the issue you are facing.");
+      return;
+    }
+
+    // 5. Compulsory Photo Evidence
+    if (!imageList || imageList.length === 0) {
+      alert("Please attach at least 1 photo evidence of the civic issue.");
+      return;
+    }
+
+    // 6. Location verification
+    if (!location.latitude && !location.address?.trim()) {
+      alert("Please provide the incident location. You can click '📍 Pin Address on Map' or 'Detect GPS Location'.");
       return;
     }
 
@@ -740,15 +1050,44 @@ export default function ComplaintForm({ category, issue }) {
 
       const token = localStorage.getItem("token") || "";
 
+      let subLat = location.latitude ? parseFloat(location.latitude) : null;
+      let subLng = location.longitude ? parseFloat(location.longitude) : null;
+
+      if (!subLat || !subLng || isNaN(subLat) || isNaN(subLng)) {
+        const cleanDist = (selectedDistrict || "").replace(/\([^)]*\)/g, "").trim();
+        const queries = [
+          location.address ? `${location.address}, ${cleanDist}, ${selectedState}, India` : "",
+          location.address ? `${location.address}, ${selectedState}, India` : "",
+          cleanDist ? `${cleanDist}, ${selectedState}, India` : "",
+        ].filter(Boolean);
+
+        for (const q of queries) {
+          try {
+            const geoRes = await fetch(
+              `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`,
+              { headers: { "Accept-Language": "en" } }
+            );
+            const geoData = await geoRes.json();
+            if (Array.isArray(geoData) && geoData.length > 0) {
+              subLat = parseFloat(geoData[0].lat);
+              subLng = parseFloat(geoData[0].lon);
+              break;
+            }
+          } catch (e) {
+            console.log("Client geocoding note:", e);
+          }
+        }
+      }
+
       const payload = {
         category,
         issue,
-        citizenName: formData.citizenName,
-        phone: formData.phone,
-        email: formData.email,
-        remarks: formData.remarks,
-        latitude: location.latitude,
-        longitude: location.longitude,
+        citizenName: formData.citizenName.trim(),
+        phone: cleanPhone,
+        email: cleanEmail,
+        remarks: cleanRemarks,
+        latitude: subLat,
+        longitude: subLng,
         address: location.address,
         city: location.city || selectedDistrict,
         state: selectedState || location.state,
@@ -784,8 +1123,12 @@ export default function ComplaintForm({ category, issue }) {
 
       if (resData && resData.success && resData.complaintId) {
         window.dispatchEvent(new CustomEvent("scms_complaint_registered", { detail: resData }));
+        try {
+          localStorage.setItem("scms_last_complaint_update", Date.now().toString());
+        } catch (e) {}
         setComplaintId(resData.complaintId);
         setShowSuccess(true);
+
 
         // Reset form
         setFormData({
@@ -1250,6 +1593,7 @@ export default function ComplaintForm({ category, issue }) {
                   setSelectedZone(newZone);
                   const wards = INDIAN_MUNICIPAL_HIERARCHY[newState]?.[newDist]?.[newZone] || [];
                   setSelectedWardName(wards[0]?.name || "");
+                  jumpToDistrictOrWard(newDist, "", newState);
                 }}
                 className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-blue-600 outline-none"
               >
@@ -1272,6 +1616,7 @@ export default function ComplaintForm({ category, issue }) {
                   setSelectedZone(newZone);
                   const wards = INDIAN_MUNICIPAL_HIERARCHY[selectedState]?.[newDist]?.[newZone] || [];
                   setSelectedWardName(wards[0]?.name || "Ward 01 - Main Division");
+                  jumpToDistrictOrWard(newDist, "", selectedState);
                 }}
                 className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-blue-600 outline-none"
               >
@@ -1317,7 +1662,10 @@ export default function ComplaintForm({ category, issue }) {
               <label className="block font-bold text-slate-700 mb-1">Select Municipal Ward *</label>
               <select
                 value={selectedWardName}
-                onChange={(e) => setSelectedWardName(e.target.value)}
+                onChange={(e) => {
+                  setSelectedWardName(e.target.value);
+                  jumpToDistrictOrWard(selectedDistrict, e.target.value, selectedState);
+                }}
                 className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-blue-600 outline-none"
               >
                 {(() => {
@@ -1335,7 +1683,19 @@ export default function ComplaintForm({ category, issue }) {
         </div>
 
         <div className="space-y-1.5">
-          <label className="block text-xs font-bold text-slate-700">Full Address / Landmark</label>
+          <div className="flex justify-between items-center">
+            <label className="block text-xs font-bold text-slate-700">Full Address / Landmark *</label>
+            <button
+              type="button"
+              onClick={() => geocodeAddressText()}
+              disabled={isSearchingLocation || !location.address?.trim()}
+              className="text-[11px] font-bold text-blue-700 hover:text-blue-900 flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 cursor-pointer disabled:opacity-40 transition"
+              title="Pin typed address coordinates onto map"
+            >
+              <MapPin className="w-3.5 h-3.5 text-blue-600" />
+              <span>{isSearchingLocation ? "Locating on Map..." : "📍 Pin Address on Map"}</span>
+            </button>
+          </div>
           <textarea
             rows="3"
             value={location.address}
@@ -1345,10 +1705,31 @@ export default function ComplaintForm({ category, issue }) {
                 address: e.target.value,
               }))
             }
-            placeholder="Type street name, building, ward number, or landmark..."
+            onBlur={() => {
+              if (location.address && location.address.trim().length >= 3 && !location.latitude) {
+                geocodeAddressText();
+              }
+            }}
+            placeholder="Type street name, building, ward number, or landmark (e.g. Near Bus Stand, Kuvempunagar)..."
             className="w-full text-xs rounded-xl border border-slate-300 p-3 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-600 outline-none resize-none"
           />
+
+          {pinNotification && (
+            <div
+              className={`p-2.5 rounded-xl text-xs font-medium flex items-center gap-2 animate-in fade-in duration-200 border ${
+                pinNotification.type === "success"
+                  ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                  : pinNotification.type === "info"
+                  ? "bg-blue-50 text-blue-800 border-blue-300"
+                  : "bg-red-50 text-red-800 border-red-300"
+              }`}
+            >
+              <MapPin className="w-4 h-4 shrink-0 text-blue-600" />
+              <span className="flex-1">{pinNotification.message}</span>
+            </div>
+          )}
         </div>
+
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
           <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
@@ -1399,23 +1780,46 @@ export default function ComplaintForm({ category, issue }) {
           </div>
 
           <div className="space-y-1.5">
-            <label className="block font-bold text-slate-700">Mobile Phone *</label>
+            <label className="block font-bold text-slate-700">Mobile Phone (10 Digits) *</label>
             <div className="relative">
               <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
               <input
-                type="text"
+                type="tel"
                 name="phone"
+                maxLength={10}
                 value={formData.phone}
                 onChange={handleChange}
                 placeholder="e.g. 9876543210"
-                className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-600 outline-none"
+                className={`w-full pl-9 pr-3 py-2.5 rounded-xl border bg-slate-50 focus:bg-white focus:ring-2 outline-none ${
+                  formData.phone && !/^[6-9]\d{9}$/.test(formData.phone.replace(/[\s-]/g, ""))
+                    ? "border-amber-400 focus:ring-amber-500"
+                    : "border-slate-300 focus:ring-blue-600"
+                }`}
               />
             </div>
+            {formData.phone && !/^[6-9]\d{9}$/.test(formData.phone.replace(/[\s-]/g, "")) && (
+              <p className="text-[11px] text-amber-700 font-semibold mt-1 flex items-center gap-1">
+                <span>⚠️ Must be 10 digits starting with 6, 7, 8, or 9 (currently: {formData.phone.length}/10)</span>
+              </p>
+            )}
           </div>
         </div>
 
         <div className="space-y-1.5 text-xs">
-          <label className="block font-bold text-slate-700">Email Address (For Status Updates & Verification) *</label>
+          <div className="flex justify-between items-center">
+            <label className="block font-bold text-slate-700">Email Address (For Status Updates & Verification) *</label>
+            {emailVerification.status === "valid" && (
+              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Active Mail Server Verified
+              </span>
+            )}
+            {emailVerification.status === "checking" && (
+              <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded flex items-center gap-1">
+                <RefreshCw className="w-3 h-3 text-blue-600 animate-spin" /> Verifying MX Records...
+              </span>
+            )}
+          </div>
+
           <div className="relative">
             <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
             <input
@@ -1423,10 +1827,67 @@ export default function ComplaintForm({ category, issue }) {
               name="email"
               value={formData.email}
               onChange={handleChange}
+              onBlur={() => {
+                if (formData.email && formData.email.trim()) {
+                  verifyEmailInput(formData.email, true);
+                }
+              }}
               placeholder="e.g. citizen@example.com"
-              className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-600 outline-none"
+              className={`w-full pl-9 pr-9 py-2.5 rounded-xl border outline-none transition ${
+                emailVerification.status === "invalid"
+                  ? "border-red-500 bg-red-50/20 focus:ring-2 focus:ring-red-500 text-slate-900"
+                  : emailVerification.status === "valid"
+                  ? "border-emerald-500 bg-emerald-50/20 focus:ring-2 focus:ring-emerald-500 text-slate-900"
+                  : emailVerification.status === "checking"
+                  ? "border-blue-400 bg-blue-50/10 focus:ring-2 focus:ring-blue-500"
+                  : "border-slate-300 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-600"
+              }`}
             />
+
+            {/* Right Status Icon */}
+            <div className="absolute right-3 top-3">
+              {emailVerification.status === "checking" && (
+                <RefreshCw className="w-4 h-4 text-blue-500 animate-spin" />
+              )}
+              {emailVerification.status === "valid" && (
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              )}
+              {emailVerification.status === "invalid" && (
+                <AlertCircle className="w-4 h-4 text-red-500" />
+              )}
+            </div>
           </div>
+
+          {/* Detailed Email Verification Error & Auto-Fix Banner */}
+          {emailVerification.status === "invalid" && (
+            <div className="p-2.5 rounded-xl bg-red-50 border border-red-200 text-xs text-red-800 space-y-1.5 animate-in fade-in duration-200">
+              <div className="flex items-start gap-1.5 font-bold">
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                <p className="leading-snug">{emailVerification.message}</p>
+              </div>
+
+              {emailVerification.suggestion && (
+                <div className="flex items-center gap-2 pt-1 border-t border-red-200/70">
+                  <span className="text-[11px] text-slate-700 font-semibold">Suggested Correction:</span>
+                  <button
+                    type="button"
+                    onClick={() => applyEmailSuggestion(emailVerification.suggestion)}
+                    className="px-2.5 py-1 bg-blue-900 hover:bg-blue-950 text-white rounded-lg font-bold text-[11px] transition active:scale-95 flex items-center gap-1 cursor-pointer shadow-xs"
+                  >
+                    <span>Fix to: {emailVerification.suggestion}</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Validated domain message */}
+          {emailVerification.status === "valid" && (
+            <p className="text-[11px] text-emerald-700 font-semibold flex items-center gap-1 mt-0.5">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              <span>{emailVerification.message}</span>
+            </p>
+          )}
         </div>
 
         <div className="space-y-1.5 text-xs">
@@ -1434,8 +1895,12 @@ export default function ComplaintForm({ category, issue }) {
             <label className="block font-bold text-slate-800">
               Detailed Description of the Issue You Are Facing *
             </label>
-            <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-              Grievance Details
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+              (formData.remarks || "").trim().length >= 10
+                ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                : "bg-amber-50 text-amber-800 border-amber-200"
+            }`}>
+              {(formData.remarks || "").trim().length >= 10 ? "✓ Complete" : `${(formData.remarks || "").trim().length}/10 chars required`}
             </span>
           </div>
           <textarea
@@ -1443,12 +1908,23 @@ export default function ComplaintForm({ category, issue }) {
             name="remarks"
             value={formData.remarks}
             onChange={handleChange}
-            placeholder="Write a small or detailed description of the issue you are facing (e.g. depth of pothole, duration of water outage, hazardous sparking details, or landmark context)..."
-            className="w-full rounded-xl border border-slate-300 p-3.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-600 outline-none resize-none leading-relaxed"
+            placeholder="Write a clear description of the issue you are facing (e.g. depth of pothole, duration of water outage, hazardous sparking details, or landmark context - minimum 10 characters)..."
+            className={`w-full rounded-xl border p-3.5 bg-slate-50 focus:bg-white focus:ring-2 outline-none resize-none leading-relaxed ${
+              formData.remarks && formData.remarks.trim().length > 0 && formData.remarks.trim().length < 10
+                ? "border-amber-400 focus:ring-amber-500"
+                : "border-slate-300 focus:ring-blue-600"
+            }`}
           />
-          <p className="text-[11px] text-slate-500">
-            Explain the problem clearly so municipal inspection officers can dispatch the appropriate repair team.
-          </p>
+          <div className="flex justify-between items-center text-[11px] text-slate-500">
+            <p>
+              Explain the problem clearly so municipal inspection officers can dispatch the appropriate repair team.
+            </p>
+            {formData.remarks && formData.remarks.trim().length > 0 && formData.remarks.trim().length < 10 && (
+              <span className="text-amber-700 font-bold">
+                Write at least 10 characters ({10 - formData.remarks.trim().length} more required)
+              </span>
+            )}
+          </div>
         </div>
       </div>
 

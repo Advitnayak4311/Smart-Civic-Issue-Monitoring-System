@@ -26,56 +26,6 @@ export const calculateHaversineDistance = (lat1, lon1, lat2, lon2) => {
   return Math.round(R * c); // Distance in meters
 };
 
-// ==========================================
-// Complaint Confidence Score (0 - 100)
-// ==========================================
-export const calculateConfidenceScore = (complaint) => {
-  let score = 0;
-
-  // 1. Image Uploaded (+20)
-  const hasImage = Boolean(
-    (complaint.imageUrl && complaint.imageUrl.trim() !== "") ||
-    (Array.isArray(complaint.imageList) && complaint.imageList.length > 0)
-  );
-  if (hasImage) score += 20;
-
-  // 2. GPS Available (+15)
-  const lat = complaint.location?.latitude ?? complaint.latitude;
-  const lon = complaint.location?.longitude ?? complaint.longitude;
-  if (lat && lon) score += 15;
-
-  // 3. Reverse Geocoding Successful (+10)
-  const hasAddress = Boolean(
-    complaint.address ||
-    complaint.location?.address
-  );
-  if (hasAddress) score += 10;
-
-  // 4. Detailed Description (>80 chars) (+10)
-  const remarksLength = (complaint.remarks || "").trim().length;
-  if (remarksLength > 80) score += 10;
-
-  // 5. Citizen Logged In (+10)
-  if (complaint.user) score += 10;
-
-  // 6. Support Count (+5 per supporter, max +25)
-  const supportCount = complaint.supportCount || 1;
-  const supportBonus = Math.min(25, Math.max(0, (supportCount - 1) * 5));
-  score += supportBonus;
-
-  // 7. No Duplicate (+10)
-  if (!complaint.isDuplicate) score += 10;
-
-  // Capped at 100 max
-  score = Math.min(100, Math.max(0, score));
-
-  // Determine Level
-  let level = "Low";
-  if (score >= 80) level = "High";
-  else if (score >= 50) level = "Medium";
-
-  return { score, level };
-};
 
 // ==========================================
 // Complaint Impact Score (0 - 200)

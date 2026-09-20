@@ -1,5 +1,6 @@
 import Complaint from "../models/Complaint.js";
 import Ward from "../models/Ward.js";
+import { resolveCoordinates } from "../utils/geoCoder.js";
 
 // Master 15 City Wards Seed Data for consistent Smart City Analytics
 const DEFAULT_CITY_WARDS = [
@@ -26,41 +27,61 @@ const DEFAULT_CITY_WARDS = [
 export const getGisComplaints = async (req, res) => {
   try {
     const complaints = await Complaint.find()
-      .select("complaintId category issue department status priority location address citizenName createdAt impactScore confidenceScore supportCount slaLimitHours ward wardNumber")
+      .select("complaintId category issue department status priority location address citizenName createdAt impactScore supportCount slaLimitHours ward wardNumber city district state")
       .lean();
 
-    // Map into GIS GeoJSON-friendly marker objects with fallback GPS coordinates around city center
-    const markers = complaints.map((c, idx) => {
-      const parsedLat = parseFloat(c.location?.latitude) || parseFloat(c.latitude);
-      const parsedLng = parseFloat(c.location?.longitude) || parseFloat(c.longitude);
-      const lat = !isNaN(parsedLat) && parsedLat !== 0 ? parsedLat : (12.9716 + (Math.sin(idx * 1.5) * 0.04));
-      const lng = !isNaN(parsedLng) && parsedLng !== 0 ? parsedLng : (77.5946 + (Math.cos(idx * 1.5) * 0.04));
+    // Map into GIS markers with dynamic coordinate resolution
+    const markers = await Promise.all(
+      complaints.map(async (c) => {
+        let lat = parseFloat(c.location?.latitude) || parseFloat(c.latitude);
+        let lng = parseFloat(c.location?.longitude) || parseFloat(c.longitude);
 
-      return {
-        _id: c._id,
-        complaintId: c.complaintId,
-        category: c.category || "General",
-        issue: c.issue || "Civic Issue",
-        department: c.department || "Public Works",
-        status: c.status || "Pending",
-        priority: c.priority || "Medium",
-        impactScore: c.impactScore || 45,
-        confidenceScore: c.confidenceScore || 75,
-        citizenName: c.citizenName || "Citizen Report",
-        address: c.address || c.location?.address || "City Location",
-        ward: c.ward || `Ward ${ (idx % 15) + 1}`,
-        createdAt: c.createdAt,
-        latitude: lat,
-        longitude: lng,
-        // Intensity for heatmap overlay (0.1 to 1.0 based on impactScore)
-        heatWeight: Math.min(1.0, Math.max(0.2, (c.impactScore || 50) / 200)),
-      };
-    });
+        if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
+          const resolved = await resolveCoordinates({
+            address: c.address || c.location?.address || "",
+            ward: c.ward || "",
+            city: c.city || "",
+            district: c.district || "",
+            state: c.state || "",
+          });
+          if (resolved) {
+            lat = resolved.latitude;
+            lng = resolved.longitude;
+          }
+        }
+
+        // If coordinates cannot be identified at all, skip rather than placing false pin
+        if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
+          return null;
+        }
+
+        return {
+          _id: c._id,
+          complaintId: c.complaintId,
+          category: c.category || "General",
+          issue: c.issue || "Civic Issue",
+          department: c.department || "Public Works",
+          status: c.status || "Pending",
+          priority: c.priority || "Medium",
+          impactScore: c.impactScore || 45,
+          citizenName: c.citizenName || "Citizen Report",
+          address: c.address || c.location?.address || "City Location",
+          ward: c.ward || "City Ward",
+          createdAt: c.createdAt,
+          latitude: lat,
+          longitude: lng,
+          // Intensity for heatmap overlay (0.1 to 1.0 based on impactScore)
+          heatWeight: Math.min(1.0, Math.max(0.2, (c.impactScore || 50) / 200)),
+        };
+      })
+    );
+
+    const validMarkers = markers.filter(Boolean);
 
     return res.status(200).json({
       success: true,
-      count: markers.length,
-      markers,
+      count: validMarkers.length,
+      markers: validMarkers,
     });
   } catch (error) {
     console.error("GIS Complaints Error:", error);

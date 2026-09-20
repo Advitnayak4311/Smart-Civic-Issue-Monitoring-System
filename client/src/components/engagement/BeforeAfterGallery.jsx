@@ -167,7 +167,7 @@ export default function BeforeAfterGallery() {
               AFTER REMEDIATION
             </span>
             <span className="bg-emerald-950/80 text-emerald-200 px-2.5 py-0.5 rounded-md text-[10px] uppercase font-bold border border-emerald-700">
-              Verified Municipal Fix
+              {current.afterImage ? "Verified Municipal Fix" : "Marked as Completed"}
             </span>
           </div>
 
@@ -189,9 +189,21 @@ export default function BeforeAfterGallery() {
                 </button>
               </div>
             ) : (
-              <div className="text-center text-slate-400 text-xs font-bold space-y-2 p-6">
-                <CheckCircle2 className="w-10 h-10 mx-auto text-emerald-500" />
-                <p>Municipal repair verified & resolution certified by inspector.</p>
+              <div className="text-center p-6 space-y-3 max-w-xs">
+                <div className="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto border border-emerald-300 shadow-xs">
+                  <CheckCircle2 className="w-8 h-8" />
+                </div>
+                <div className="space-y-1">
+                  <span className="inline-block bg-emerald-100 text-emerald-900 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border border-emerald-300">
+                    Marked as Completed
+                  </span>
+                  <h4 className="text-sm font-extrabold text-slate-900">
+                    Issue Officially Resolved
+                  </h4>
+                  <p className="text-[11px] text-slate-600 leading-relaxed">
+                    Field resolution certified completed by municipal team. (Post-repair photo was not attached).
+                  </p>
+                </div>
               </div>
             )}
           </div>

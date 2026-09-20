@@ -21,118 +21,318 @@ export const generateAiSummary = (remarks = "", category = "", issue = "") => {
   return { summary, keywords, severity };
 };
 
-// 2. Predictive Complaint Analytics & Forecasting Engine
+// 2. Predictive Complaint Analytics & Forecasting Engine (100% Real Database Trends)
 export const predictComplaintTrends = (allComplaints = []) => {
-  const total = allComplaints.length || 20;
-
-  const currentRoads = allComplaints.filter((c) => (c.category || "").toLowerCase().includes("road")).length || 128;
-  const currentWater = allComplaints.filter((c) => (c.category || "").toLowerCase().includes("water")).length || 95;
-  const currentGarbage = allComplaints.filter((c) => (c.category || "").toLowerCase().includes("garbage")).length || 110;
-
-  const forecast = [
-    { category: "Roads & Potholes", currentMonth: currentRoads, predictedNextMonth: Math.round(currentRoads * 1.29), increasePercent: 29, riskLevel: "High" },
-    { category: "Sanitation & Garbage", currentMonth: currentGarbage, predictedNextMonth: Math.round(currentGarbage * 1.15), increasePercent: 15, riskLevel: "Medium" },
-    { category: "Water Supply & Leakage", currentMonth: currentWater, predictedNextMonth: Math.round(currentWater * 1.22), increasePercent: 22, riskLevel: "High" },
-    { category: "Street Lighting & Power", currentMonth: 45, predictedNextMonth: 52, increasePercent: 15, riskLevel: "Low" },
-    { category: "Drainage & Sewerage", currentMonth: 60, predictedNextMonth: 78, increasePercent: 30, riskLevel: "Critical" },
+  const standardCategories = [
+    "Roads & Infrastructure",
+    "Water & Pipeline",
+    "Street Light & Electrical",
+    "Sanitation & Garbage",
+    "Drainage & Sewerage",
   ];
 
-  const highRiskWards = [
-    { ward: "Ward 06 - Whitefield Tech Park", predictedIncrease: "+34%", primaryRisk: "Road & Drainage Overload" },
-    { ward: "Ward 08 - Electronic City Gateway", predictedIncrease: "+28%", primaryRisk: "Water Supply Stoppage" },
-    { ward: "Ward 12 - Central Civic District", predictedIncrease: "+22%", primaryRisk: "Garbage Accumulation" },
-  ];
+  if (!allComplaints || allComplaints.length === 0) {
+    const forecast = standardCategories.map((cat) => ({
+      category: cat,
+      currentMonth: 0,
+      predictedNextMonth: 0,
+      increasePercent: 0,
+      riskLevel: "Low",
+    }));
 
-  return { forecast, highRiskWards, confidenceInterval: "94.2%" };
+    return {
+      forecast,
+      highRiskWards: [],
+      sampleSize: 0,
+    };
+  }
+
+  const now = Date.now();
+  const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+  const sixtyDaysMs = 60 * 24 * 60 * 60 * 1000;
+
+  // Extract all distinct categories from actual complaints plus standard categories
+  const actualCategories = Array.from(
+    new Set([
+      ...standardCategories,
+      ...allComplaints.map((c) => c.category).filter(Boolean),
+    ])
+  );
+
+  const forecast = actualCategories.map((cat) => {
+    const matchingComplaints = allComplaints.filter(
+      (c) => (c.category || "").toLowerCase() === cat.toLowerCase()
+    );
+
+    const currentMonthTickets = matchingComplaints.filter((c) => {
+      const createdTime = new Date(c.createdAt || now).getTime();
+      return now - createdTime <= thirtyDaysMs;
+    });
+
+    const previousMonthTickets = matchingComplaints.filter((c) => {
+      const createdTime = new Date(c.createdAt || now).getTime();
+      const age = now - createdTime;
+      return age > thirtyDaysMs && age <= sixtyDaysMs;
+    });
+
+    const currentCount = currentMonthTickets.length || matchingComplaints.length;
+    const prevCount = previousMonthTickets.length;
+
+    let predictedNextMonth = currentCount;
+    let increasePercent = 0;
+
+    if (prevCount > 0) {
+      const trendRate = (currentCount - prevCount) / prevCount;
+      predictedNextMonth = Math.max(0, Math.round(currentCount * (1 + trendRate)));
+      increasePercent = Math.round(trendRate * 100);
+    } else {
+      predictedNextMonth = currentCount;
+      increasePercent = 0;
+    }
+
+    const highPriorityCount = matchingComplaints.filter(
+      (c) => c.priority === "High" && c.status !== "Closed"
+    ).length;
+
+    let riskLevel = "Low";
+    if (highPriorityCount >= 3 || currentCount >= 10) riskLevel = "High";
+    else if (highPriorityCount >= 1 || currentCount >= 4) riskLevel = "Medium";
+
+    return {
+      category: cat,
+      currentMonth: currentCount,
+      predictedNextMonth,
+      increasePercent,
+      riskLevel,
+    };
+  });
+
+  // Calculate High-Risk Wards dynamically from genuine complaints with wards
+  const wardMap = {};
+  allComplaints.forEach((c) => {
+    const wardName = c.ward?.trim() || (c.location?.address ? c.location.address.split(",")[0] : null);
+    if (!wardName) return;
+
+    if (!wardMap[wardName]) {
+      wardMap[wardName] = {
+        ward: wardName,
+        totalTickets: 0,
+        pendingTickets: 0,
+        highPriority: 0,
+        categories: {},
+      };
+    }
+
+    wardMap[wardName].totalTickets++;
+    if (c.status !== "Closed" && c.status !== "Completed") {
+      wardMap[wardName].pendingTickets++;
+    }
+    if (c.priority === "High") {
+      wardMap[wardName].highPriority++;
+    }
+
+    const cat = c.category || "General";
+    wardMap[wardName].categories[cat] = (wardMap[wardName].categories[cat] || 0) + 1;
+  });
+
+  const highRiskWards = Object.values(wardMap)
+    .sort((a, b) => b.pendingTickets - a.pendingTickets || b.highPriority - a.highPriority)
+    .slice(0, 3)
+    .map((w) => {
+      const topCategory =
+        Object.entries(w.categories).sort((a, b) => b[1] - a[1])[0]?.[0] || "Civic Grievances";
+
+      return {
+        ward: w.ward,
+        predictedIncrease: `${w.pendingTickets} pending / ${w.totalTickets} total`,
+        primaryRisk: `${topCategory} (${w.highPriority} High Priority)`,
+      };
+    });
+
+  return {
+    forecast,
+    highRiskWards,
+    sampleSize: allComplaints.length,
+  };
 };
 
-// 3. Intelligent Municipal Resource Allocation Engine
+// 3. Intelligent Municipal Resource Allocation Engine (Derived Strictly from Real Department Backlog)
 export const generateResourceAllocation = (allComplaints = []) => {
-  const pendingCount = allComplaints.filter((c) => c.status !== "Closed" && c.status !== "Completed").length || 35;
+  const pendingComplaints = (allComplaints || []).filter(
+    (c) => c.status !== "Closed" && c.status !== "Completed"
+  );
 
-  return [
-    {
-      department: "Road Maintenance Division",
-      pendingTickets: Math.round(pendingCount * 0.35),
-      recommendedWorkforce: "+4 Asphalt Patching Teams",
-      recommendedEquipment: "2 Road Rollers & 1 Cold Mix Truck",
-      urgency: "High",
-    },
-    {
-      department: "Sanitation & Waste Management",
-      pendingTickets: Math.round(pendingCount * 0.25),
-      recommendedWorkforce: "+6 Waste Collection Squads",
-      recommendedEquipment: "3 Compactor Trucks",
-      urgency: "Medium",
-    },
-    {
-      department: "Water Supply & Sewerage Board",
-      pendingTickets: Math.round(pendingCount * 0.20),
-      recommendedWorkforce: "+3 Hydro-Jet Sewer Teams",
-      recommendedEquipment: "2 High-Pressure Suction Vehicles",
-      urgency: "Critical",
-    },
-    {
-      department: "Electrical & Street Lighting",
-      pendingTickets: Math.round(pendingCount * 0.20),
-      recommendedWorkforce: "+2 Line Repair Technicians",
-      recommendedEquipment: "1 Bucket Lift Vehicle",
-      urgency: "Low",
-    },
-  ];
+  if (pendingComplaints.length === 0) {
+    return [];
+  }
+
+  // Group pending tickets by real department
+  const deptMap = {};
+  pendingComplaints.forEach((c) => {
+    const dept = c.department?.trim() || "General Department";
+    if (!deptMap[dept]) {
+      deptMap[dept] = {
+        department: dept,
+        pendingTickets: 0,
+        highPriority: 0,
+        categories: new Set(),
+      };
+    }
+    deptMap[dept].pendingTickets++;
+    if (c.priority === "High") deptMap[dept].highPriority++;
+    if (c.category) deptMap[dept].categories.add(c.category);
+  });
+
+  return Object.values(deptMap)
+    .sort((a, b) => b.pendingTickets - a.pendingTickets || b.highPriority - a.highPriority)
+    .map((item) => {
+      const { department, pendingTickets, highPriority } = item;
+
+      let recommendedWorkforce = "1 Inspection Team (2 field staff)";
+      if (pendingTickets > 8) {
+        recommendedWorkforce = `${Math.ceil(pendingTickets / 3)} Field Units (${Math.ceil(pendingTickets / 3) * 3} staff)`;
+      } else if (pendingTickets > 3) {
+        recommendedWorkforce = "2 Dedicated Field Units (6 staff)";
+      } else if (pendingTickets > 1) {
+        recommendedWorkforce = "1 Dedicated Field Unit (3 staff)";
+      }
+
+      let recommendedEquipment = "Standard Utility Van & Toolkit";
+      const deptLower = department.toLowerCase();
+      if (deptLower.includes("road") || deptLower.includes("highway") || deptLower.includes("pwd")) {
+        recommendedEquipment = pendingTickets > 3 ? "1 Asphalt Compactor & Repair Van" : "1 Rapid Patch Utility Van";
+      } else if (deptLower.includes("water") || deptLower.includes("drainage") || deptLower.includes("sewer")) {
+        recommendedEquipment = pendingTickets > 3 ? "1 High-Pressure Suction Jetter & Tool Van" : "1 Pipe Inspection & Repair Van";
+      } else if (deptLower.includes("sanitation") || deptLower.includes("waste")) {
+        recommendedEquipment = pendingTickets > 3 ? "2 Hydraulic Compactor Trucks" : "1 Waste Collection Tipper";
+      } else if (deptLower.includes("electric") || deptLower.includes("energy") || deptLower.includes("light")) {
+        recommendedEquipment = "1 Aerial Bucket Lift Van & Diagnostic Kit";
+      }
+
+      let urgency = "Low";
+      if (highPriority > 2 || pendingTickets >= 10) urgency = "Critical";
+      else if (highPriority > 0 || pendingTickets >= 4) urgency = "High";
+      else if (pendingTickets > 1) urgency = "Medium";
+
+      return {
+        department,
+        pendingTickets,
+        recommendedWorkforce,
+        recommendedEquipment,
+        urgency,
+      };
+    });
 };
 
 // 4. AI Before & After Image Analysis Simulator
 export const evaluateBeforeAfterImage = (beforeImg, afterImg) => {
   if (!afterImg) {
-    return { repairConfidence: 0, similarityScore: 0, status: "Awaiting Remediation Upload" };
+    return {
+      status: "Awaiting Remediation Upload",
+      message: "Please upload the post-repair image to perform visual confirmation.",
+    };
   }
 
-  // Simulated visual comparison engine
-  const repairConfidence = 96; // 96% Repair Completed
-  const similarityScore = 88;
-
   return {
-    repairConfidence,
-    similarityScore,
-    status: "Verified 96% Repair Completion",
-    visualDifference: "Remediation verified: Debris removed and structural patch confirmed.",
+    status: "Remediation Evidence Attached",
+    message: "Field remediation image submitted. Awaiting municipal officer review and citizen confirmation.",
   };
 };
 
-// 5. AI Municipal Officer Assistant Query Processor
+// 5. AI Municipal Officer Assistant Query Processor (100% Real Dynamic Stats)
 export const processOfficerQuery = (queryText = "", complaints = []) => {
-  const q = queryText.toLowerCase();
+  const q = (queryText || "").toLowerCase();
+  const safeComplaints = Array.isArray(complaints) ? complaints : [];
+  const total = safeComplaints.length;
+  const activeTickets = safeComplaints.filter((c) => c.status !== "Closed" && c.status !== "Completed");
+  const resolvedTickets = safeComplaints.filter((c) => c.status === "Closed" || c.status === "Completed");
 
   if (q.includes("high priority") || q.includes("urgent")) {
-    const highTickets = complaints.filter((c) => c.priority === "High" && c.status !== "Closed");
+    const highTickets = activeTickets.filter((c) => c.priority === "High");
     return {
-      answer: `Found ${highTickets.length} active High-Priority grievances requiring immediate officer attention.`,
-      table: highTickets.slice(0, 5).map((c) => ({ Ref: c.complaintId, Category: c.category, Dept: c.department, Status: c.status })),
+      answer: highTickets.length > 0
+        ? `Found ${highTickets.length} active High-Priority grievance(s) requiring immediate officer attention.`
+        : "No active High-Priority grievances pending in the queue.",
+      table: highTickets.slice(0, 5).map((c) => ({
+        Ref: c.complaintId,
+        Category: c.category,
+        Dept: c.department || "General",
+        Status: c.status,
+      })),
       action: "Filter Table by High Priority",
     };
   }
 
   if (q.includes("backlog") || q.includes("highest")) {
+    if (activeTickets.length === 0) {
+      return {
+        answer: "There are currently 0 active pending grievances across all municipal departments. No backlog detected.",
+        stats: { "Active Pending": 0, "Resolved": resolvedTickets.length },
+        action: "Review Department Registry",
+      };
+    }
+
+    const deptCounts = {};
+    activeTickets.forEach((c) => {
+      const d = c.department?.trim() || "General Department";
+      deptCounts[d] = (deptCounts[d] || 0) + 1;
+    });
+
+    const sortedDepts = Object.entries(deptCounts).sort((a, b) => b[1] - a[1]);
+    const [topDept, topCount] = sortedDepts[0];
+    const topPercent = Math.round((topCount / activeTickets.length) * 100);
+
+    const stats = {};
+    sortedDepts.slice(0, 4).forEach(([d, count]) => {
+      stats[d] = `${Math.round((count / activeTickets.length) * 100)}% (${count})`;
+    });
+
     return {
-      answer: "Public Works & Road Maintenance Division currently holds the highest pending backlog (42% of active tickets).",
-      stats: { "Road Dept": "42%", "Sanitation": "28%", "Water Board": "18%", "Lighting": "12%" },
+      answer: `${topDept} currently holds the highest pending backlog with ${topCount} ticket(s) (${topPercent}% of active pending grievances).`,
+      stats,
       action: "Review Department Performance",
     };
   }
 
-  if (q.includes("sla") || q.includes("violation") || q.includes("breach")) {
-    const breached = complaints.filter((c) => c.status !== "Closed" && c.status !== "Completed");
+  if (q.includes("resolved") || q.includes("completed") || q.includes("closed")) {
+    const resolutionRate = total > 0 ? Math.round((resolvedTickets.length / total) * 100) : 100;
     return {
-      answer: `Found ${breached.length} complaints close to or exceeding SLA resolution thresholds.`,
-      table: breached.slice(0, 5).map((c) => ({ Ref: c.complaintId, Dept: c.department, Created: c.createdAt })),
-      action: "Run Auto-Escalation Engine",
+      answer: `A total of ${resolvedTickets.length} out of ${total} grievance(s) have been resolved (${resolutionRate}% resolution rate).`,
+      stats: {
+        "Resolved Tickets": resolvedTickets.length,
+        "Active Pending": activeTickets.length,
+        "Total Filed": total,
+      },
+      action: "View Resolution Archives",
     };
   }
 
+  if (q.includes("sla") || q.includes("violation") || q.includes("breach")) {
+    return {
+      answer: activeTickets.length > 0
+        ? `Found ${activeTickets.length} active grievance ticket(s) currently being monitored against SLA turnaround targets.`
+        : "All grievances have been addressed. No SLA breaches or active tickets pending.",
+      table: activeTickets.slice(0, 5).map((c) => ({
+        Ref: c.complaintId,
+        Category: c.category,
+        Dept: c.department || "General",
+        Created: new Date(c.createdAt).toLocaleDateString(),
+      })),
+      action: "Monitor SLA Performance",
+    };
+  }
+
+  // Default natural language overview
+  const resRate = total > 0 ? Math.round((resolvedTickets.length / total) * 100) : 100;
   return {
-    answer: `Analyzed municipal database across ${complaints.length} tickets. Operational status is normal with 92% overall SLA compliance.`,
-    stats: { "Total Tickets": complaints.length, "System Health": "94.2%" },
+    answer: total > 0
+      ? `Analyzed municipal database across ${total} total grievance ticket(s). ${resolvedTickets.length} resolved (${resRate}% resolution rate), with ${activeTickets.length} active grievance(s) currently in progress.`
+      : "The municipal grievance registry is currently clear with 0 complaints recorded.",
+    stats: {
+      "Total Tickets": total,
+      "Resolved": resolvedTickets.length,
+      "Active Pending": activeTickets.length,
+    },
     action: "View GIS Command Map",
   };
 };

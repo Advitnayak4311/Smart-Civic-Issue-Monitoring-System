@@ -123,7 +123,7 @@ export default function TrackComplaint() {
   );
 
   const beforePhoto = complaint?.beforeImage || complaint?.imageUrl || (complaint?.imageList && complaint?.imageList[0]) || "";
-  const afterPhoto = complaint?.afterImage || complaint?.resolutionProof || (complaint?.imageList && complaint?.imageList.length > 1 ? complaint.imageList[1] : beforePhoto);
+  const afterPhoto = complaint?.afterImage || complaint?.resolutionProof || null;
 
   // Live SLA Countdown Computation
   const getSlaInfo = () => {
@@ -359,17 +359,17 @@ export default function TrackComplaint() {
                     </span>
                   </div>
 
-                  {/* SLA Guarantee & Live Countdown */}
+                  {/* Registration Reference & Date */}
                   <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-700/60 space-y-1">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                      Resolution SLA Bound
+                      Registration Date
                     </span>
-                    <div className={`flex items-center gap-1.5 font-extrabold text-sm ${slaInfo.isOverdue ? "text-red-400" : slaInfo.isResolved ? "text-emerald-400" : "text-emerald-400"}`}>
-                      <Clock className="w-4 h-4 shrink-0" />
-                      <span>{slaInfo.label}</span>
+                    <div className="flex items-center gap-1.5 font-extrabold text-sm text-slate-200">
+                      <Calendar className="w-4 h-4 text-blue-400 shrink-0" />
+                      <span>{new Date(complaint.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span>
                     </div>
                     <span className="text-[10px] font-medium text-slate-400 block truncate">
-                      {slaInfo.detail}
+                      Grievance Ref #{complaint.complaintId}
                     </span>
                   </div>
 
@@ -428,7 +428,7 @@ export default function TrackComplaint() {
                         </h4>
                       </div>
                       <span className="text-[10px] font-extrabold text-emerald-300 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
-                        Remediation Audit
+                        {afterPhoto ? "Remediation Audit" : "Marked as Completed"}
                       </span>
                     </div>
 
@@ -447,19 +447,34 @@ export default function TrackComplaint() {
                         />
                       </div>
 
-                      {/* After Photo */}
-                      <div className="rounded-xl overflow-hidden border border-emerald-800/60 bg-black/40">
-                        <div className="bg-emerald-950 text-emerald-300 px-3 py-1.5 text-[10px] font-black uppercase flex justify-between">
-                          <span>After Repair</span>
-                          <span>Verified Fix</span>
+                      {/* After Photo or Marked as Completed Card */}
+                      {afterPhoto ? (
+                        <div className="rounded-xl overflow-hidden border border-emerald-800/60 bg-black/40">
+                          <div className="bg-emerald-950 text-emerald-300 px-3 py-1.5 text-[10px] font-black uppercase flex justify-between">
+                            <span>After Repair</span>
+                            <span>Verified Fix</span>
+                          </div>
+                          <img
+                            src={afterPhoto}
+                            alt="After Remediation"
+                            className="w-full h-48 object-cover hover:scale-105 transition duration-300 cursor-pointer"
+                            onClick={() => setLightboxImg(afterPhoto)}
+                          />
                         </div>
-                        <img
-                          src={afterPhoto}
-                          alt="After Remediation"
-                          className="w-full h-48 object-cover hover:scale-105 transition duration-300 cursor-pointer"
-                          onClick={() => setLightboxImg(afterPhoto)}
-                        />
-                      </div>
+                      ) : (
+                        <div className="rounded-xl border border-emerald-800/60 bg-slate-950/70 p-6 flex flex-col items-center justify-center text-center space-y-2">
+                          <CheckCircle2 className="w-10 h-10 text-emerald-400" />
+                          <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-emerald-950 border border-emerald-700 text-emerald-300">
+                            Marked as Completed
+                          </span>
+                          <p className="text-xs text-slate-300 font-bold">
+                            Issue Officially Resolved
+                          </p>
+                          <p className="text-[11px] text-slate-400 leading-relaxed max-w-xs">
+                            Municipal authority completed field remediation. Secondary completion photo was not attached.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

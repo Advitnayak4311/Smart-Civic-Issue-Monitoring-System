@@ -1,4 +1,4 @@
-import { FileText, Clock, CheckCircle2, ShieldAlert, ShieldCheck } from "lucide-react";
+import { FileText, Clock, CheckCircle2, ShieldAlert } from "lucide-react";
 
 export default function DashboardCards({ complaints }) {
   const safeComplaints = Array.isArray(complaints) ? complaints : [];
@@ -6,11 +6,6 @@ export default function DashboardCards({ complaints }) {
   const pending = safeComplaints.filter((c) => c?.status === "Pending").length;
   const completed = safeComplaints.filter((c) => c?.status === "Completed").length;
   const highPriority = safeComplaints.filter((c) => c?.priority === "High").length;
-  
-  // Phase 1 Intelligence Metrics
-  const avgConfidence = total > 0
-    ? Math.round(safeComplaints.reduce((sum, c) => sum + (c?.confidenceScore ?? 75), 0) / total)
-    : 100;
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
@@ -50,15 +45,15 @@ export default function DashboardCards({ complaints }) {
         </div>
       </div>
 
-      {/* Average Confidence Rating */}
+      {/* Completed / Resolved */}
       <div className="bg-white rounded-2xl border border-emerald-200 p-4 shadow-xs flex items-center justify-between bg-gradient-to-br from-white to-emerald-50/30">
         <div className="space-y-1">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">Avg Confidence</p>
-          <h2 className="text-2xl font-extrabold text-emerald-900">{avgConfidence}%</h2>
-          <p className="text-[10px] text-emerald-600 font-medium">Authenticity rating</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">Resolved Grievances</p>
+          <h2 className="text-2xl font-extrabold text-emerald-900">{completed}</h2>
+          <p className="text-[10px] text-emerald-600 font-medium">Successfully remediated</p>
         </div>
         <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold border border-emerald-300">
-          <ShieldCheck className="w-5 h-5" />
+          <CheckCircle2 className="w-5 h-5" />
         </div>
       </div>
     </div>

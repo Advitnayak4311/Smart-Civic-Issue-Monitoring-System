@@ -134,31 +134,51 @@ export const submitComplaintFeedback = async (req, res) => {
 // ==========================================
 export const getResolutionGallery = async (req, res) => {
   try {
+    // Only completely resolved grievances (Completed or Closed)
     const galleryItems = await Complaint.find({
-      status: { $in: ["Completed", "Closed", "In Progress", "Accepted"] },
+      status: { $in: ["Completed", "Closed"] },
     })
       .select("complaintId category issue department status beforeImage afterImage imageUrl imageList image resolutionProof resolutionNotes completedAt citizenName ward address")
-      .sort({ updatedAt: -1, completedAt: -1, createdAt: -1 })
-      .limit(20)
+      .sort({ completedAt: -1, updatedAt: -1, createdAt: -1 })
+      .limit(25)
       .lean();
 
-    const gallery = galleryItems.map((item) => {
-      const primaryPhoto = item.imageUrl || (item.imageList && item.imageList.length > 0 ? item.imageList[0] : "") || item.image || "";
-      const secondaryPhoto = (item.imageList && item.imageList.length > 1 ? item.imageList[1] : "") || item.resolutionProof || item.afterImage || primaryPhoto;
+    const gallery = galleryItems
+      .filter((item) => {
+        const hasBefore = Boolean(
+          item.beforeImage ||
+          item.imageUrl ||
+          (item.imageList && item.imageList.length > 0) ||
+          item.image
+        );
+        return hasBefore;
+      })
+      .map((item) => {
+        const primaryPhoto =
+          item.beforeImage ||
+          item.imageUrl ||
+          (item.imageList && item.imageList.length > 0 ? item.imageList[0] : "") ||
+          item.image ||
+          "";
 
-      return {
-        _id: item._id,
-        complaintId: item.complaintId,
-        category: item.category,
-        issue: item.issue,
-        department: item.department || "Municipal Division",
-        beforeImage: item.beforeImage || primaryPhoto,
-        afterImage: item.afterImage || item.resolutionProof || secondaryPhoto || primaryPhoto,
-        resolutionNotes: item.resolutionNotes || "Remediation verified by field inspection team.",
-        completedAt: item.completedAt || item.updatedAt || item.createdAt || new Date(),
-        ward: item.ward || "Central Division",
-      };
-    });
+        // Verified After Image: ONLY if citizen or admin uploaded an after image (no fake fallback to primaryPhoto)
+        const verifiedAfter = item.afterImage || item.resolutionProof || null;
+
+        return {
+          _id: item._id,
+          complaintId: item.complaintId,
+          category: item.category,
+          issue: item.issue,
+          department: item.department || "Municipal Division",
+          status: item.status || "Completed",
+          beforeImage: primaryPhoto,
+          afterImage: verifiedAfter,
+          hasAfterImage: Boolean(verifiedAfter),
+          resolutionNotes: item.resolutionNotes || "Field remediation verified & certified completed by municipal inspection authority.",
+          completedAt: item.completedAt || item.updatedAt || item.createdAt || new Date(),
+          ward: item.ward || "Central Division",
+        };
+      });
 
     return res.status(200).json({
       success: true,

@@ -54,7 +54,9 @@ export default function PredictiveAnalyticsCard() {
         </div>
 
         <span className="text-xs font-extrabold bg-blue-50 text-blue-900 border border-blue-200 px-3 py-1.5 rounded-full">
-          Forecast Model Confidence: {data?.confidenceInterval || "94.2%"}
+          {data?.sampleSize > 0
+            ? `Based on ${data.sampleSize} Grievance Record(s)`
+            : "Awaiting Grievance Data"}
         </span>
       </div>
 
@@ -63,18 +65,24 @@ export default function PredictiveAnalyticsCard() {
         <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
           Current Month vs Predicted Next Month Volume
         </h4>
-        <div className="h-64 w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={forecast}>
-              <XAxis dataKey="category" tick={{ fontSize: 11, fontWeight: "bold" }} stroke="#94a3b8" />
-              <YAxis tick={{ fontSize: 11, fontWeight: "bold" }} stroke="#94a3b8" />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="currentMonth" name="Current Month" fill="#2563eb" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="predictedNextMonth" name="Predicted Next Month" fill="#dc2626" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        {forecast.length > 0 && forecast.some((f) => f.currentMonth > 0 || f.predictedNextMonth > 0) ? (
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={forecast}>
+                <XAxis dataKey="category" tick={{ fontSize: 11, fontWeight: "bold" }} stroke="#94a3b8" />
+                <YAxis tick={{ fontSize: 11, fontWeight: "bold" }} stroke="#94a3b8" />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="currentMonth" name="Current Month" fill="#2563eb" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="predictedNextMonth" name="Predicted Next Month" fill="#dc2626" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="h-32 flex items-center justify-center bg-slate-50 rounded-xl border border-slate-200 text-slate-400 font-bold text-xs">
+            No complaints recorded yet for predictive time-series trend analysis.
+          </div>
+        )}
       </div>
 
       {/* High-Risk Ward Projections */}
@@ -83,17 +91,23 @@ export default function PredictiveAnalyticsCard() {
           <AlertTriangle className="w-4 h-4 text-red-600" /> Projected High-Risk Wards (Next Month)
         </h4>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-          {highRiskWards.map((item, idx) => (
-            <div key={idx} className="bg-red-50/80 border border-red-200 p-4 rounded-xl space-y-1">
-              <div className="flex justify-between items-center font-bold">
-                <span className="text-red-950 font-extrabold">{item.ward}</span>
-                <span className="text-red-700 bg-red-100 px-2 py-0.5 rounded text-[10px] font-black">{item.predictedIncrease}</span>
+        {highRiskWards.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+            {highRiskWards.map((item, idx) => (
+              <div key={idx} className="bg-red-50/80 border border-red-200 p-4 rounded-xl space-y-1">
+                <div className="flex justify-between items-center font-bold">
+                  <span className="text-red-950 font-extrabold">{item.ward}</span>
+                  <span className="text-red-700 bg-red-100 px-2 py-0.5 rounded text-[10px] font-black">{item.predictedIncrease}</span>
+                </div>
+                <p className="text-[11px] text-red-800 font-medium">Primary Risk: {item.primaryRisk}</p>
               </div>
-              <p className="text-[11px] text-red-800 font-medium">Primary Risk: {item.primaryRisk}</p>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl text-center text-slate-500 font-medium text-xs">
+            No municipal wards currently exhibiting abnormal escalation risk. All wards are operating within standard capacity.
+          </div>
+        )}
       </div>
     </div>
   );

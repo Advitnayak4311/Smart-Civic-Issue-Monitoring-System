@@ -11,18 +11,17 @@ import {
   YAxis,
   CartesianGrid,
 } from "recharts";
-import { PieChart as PieIcon, BarChart3, ShieldCheck, Building2 } from "lucide-react";
+import { PieChart as PieIcon, BarChart3, ShieldAlert, Building2 } from "lucide-react";
 
 export default function AnalyticsCharts({
   chartData = [],
   COLORS = ["#d97706", "#2563eb", "#6366f1", "#059669", "#dc2626"],
   monthlyData = [],
-  confidenceData = [],
+  priorityData = [],
   departmentData = [],
 }) {
-  // Fallbacks if confidenceData or departmentData not explicitly passed
   const activeStatusData = (chartData || []).filter((d) => d.value > 0);
-  const activeConfidenceData = (confidenceData || []).filter((d) => d.value > 0);
+  const activePriorityData = (priorityData || []).filter((d) => d.value > 0);
   const activeDeptData = (departmentData || []).filter((d) => d.count > 0);
 
   return (
@@ -83,28 +82,28 @@ export default function AnalyticsCharts({
         </div>
       </div>
 
-      {/* Chart 2: Grievance Authenticity & Confidence Rating */}
+      {/* Chart 2: SLA Priority Breakdown */}
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-emerald-700" />
-            <h3 className="text-sm font-bold text-slate-900">Grievance Authenticity & Confidence</h3>
+            <ShieldAlert className="w-5 h-5 text-red-600" />
+            <h3 className="text-sm font-bold text-slate-900">SLA Priority Breakdown</h3>
           </div>
-          <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-            Field Verification
+          <span className="text-[10px] font-bold text-red-800 bg-red-50 px-2 py-0.5 rounded border border-red-200">
+            Urgency Tier
           </span>
         </div>
 
         <div className="w-full h-72">
-          {activeConfidenceData.length === 0 ? (
+          {activePriorityData.length === 0 ? (
             <div className="h-full flex items-center justify-center text-xs text-slate-400 font-bold">
-              No confidence rating records found.
+              No priority records found.
             </div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={confidenceData}
+                  data={priorityData}
                   dataKey="value"
                   nameKey="name"
                   innerRadius={55}
@@ -114,10 +113,10 @@ export default function AnalyticsCharts({
                     percent > 0 ? `${(percent * 100).toFixed(0)}%` : ""
                   }
                 >
-                  {confidenceData.map((entry, index) => (
+                  {priorityData.map((entry, index) => (
                     <Cell
                       key={index}
-                      fill={entry.fill || entry.color || "#16a34a"}
+                      fill={entry.fill || entry.color || "#dc2626"}
                       stroke="#ffffff"
                       strokeWidth={2}
                     />

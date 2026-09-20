@@ -17,6 +17,7 @@ import {
   ArrowRight,
   RefreshCw,
   Camera,
+  UploadCloud,
 } from "lucide-react";
 import IncidentMap from "../UI/IncidentMap";
 import CustomStatusSelect from "./CustomStatusSelect";
@@ -220,6 +221,9 @@ export default function ComplaintModal({
   const [transferRemarks, setTransferRemarks] = useState("");
   const [isTransferring, setIsTransferring] = useState(false);
   const [transferSuccess, setTransferSuccess] = useState(null);
+  const [adminAfterImage, setAdminAfterImage] = useState(
+    selectedComplaint.afterImage || selectedComplaint.resolutionProof || ""
+  );
 
   useEffect(() => {
     if (selectedComplaint) {
@@ -233,9 +237,23 @@ export default function ComplaintModal({
         setSelectedDept(selectedComplaint.department);
       }
       setTransferRemarks("");
-      // Only clear transferSuccess if switching to a completely different complaint record
+      setAdminAfterImage(selectedComplaint.afterImage || selectedComplaint.resolutionProof || "");
     }
   }, [selectedComplaint?._id]);
+
+  const handleAdminImageUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 25 * 1024 * 1024) {
+      alert("File size exceeds 25MB limit.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setAdminAfterImage(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const hasCitizenFeedback = Boolean(
     selectedComplaint.citizenComment ||
@@ -396,34 +414,6 @@ export default function ComplaintModal({
             </div>
           )}
 
-          {/* Authenticity Confidence Rating Summary Card */}
-          <div className="bg-slate-900 text-white p-4 rounded-xl border border-slate-800 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-            <div className="space-y-1">
-              <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">
-                🛡️ Authenticity Confidence Rating
-              </span>
-              <p className="text-[10px] text-slate-400">
-                Calculated from photo evidence, verified GPS coordinates, geocoded address & details.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className="text-2xl font-extrabold text-white">
-                {selectedComplaint.confidenceScore ?? 75}%
-              </span>
-              <span
-                className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase border ${
-                  (selectedComplaint.confidenceScore ?? 75) >= 80
-                    ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
-                    : (selectedComplaint.confidenceScore ?? 75) >= 50
-                    ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                    : "bg-red-500/20 text-red-300 border-red-500/40"
-                }`}
-              >
-                {selectedComplaint.confidenceLevel || "High"} Confidence
-              </span>
-            </div>
-          </div>
 
           {/* Department Connection, Reassignment & Authority Dispatch Section */}
           <div className="bg-linear-to-br from-indigo-50/80 via-blue-50/50 to-slate-50 border border-indigo-200 p-5 rounded-2xl space-y-4 shadow-xs">
@@ -667,6 +657,65 @@ export default function ComplaintModal({
           {/* Journey Timeline Component */}
           <JourneyTimeline complaint={selectedComplaint} />
 
+          {/* Post-Resolution Completion Photo (Optional Evidence) */}
+          {selectedComplaint.afterImage ? (
+            <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-200 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-700" /> Resolution Completion Evidence Attached
+                </span>
+                <span className="text-[10px] font-extrabold bg-emerald-200/80 text-emerald-900 px-2 py-0.5 rounded-md">
+                  Live on Public Portal
+                </span>
+              </div>
+              <div className="relative w-full max-w-xs h-36 rounded-lg overflow-hidden border border-emerald-300">
+                <img
+                  src={selectedComplaint.afterImage}
+                  alt="Resolution Evidence"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <p className="text-[11px] text-emerald-800">
+                Verified post-remediation evidence photo is currently published in the Public Portal Before &amp; After gallery.
+              </p>
+            </div>
+          ) : (
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                  <Camera className="w-4 h-4 text-blue-900" /> Resolution / Completion Photo <span className="text-slate-500 font-normal">(Optional)</span>
+                </span>
+                {adminAfterImage && (
+                  <button
+                    type="button"
+                    onClick={() => setAdminAfterImage("")}
+                    className="text-[10px] font-bold text-red-600 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <X className="w-3 h-3" /> Remove Photo
+                  </button>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-500">
+                Citizen has not attached a completion image. As municipal officer, you can optionally attach the post-repair photo here to update the Public Portal Before &amp; After gallery.
+              </p>
+              {adminAfterImage ? (
+                <div className="relative w-full max-w-xs h-36 rounded-lg overflow-hidden border-2 border-emerald-500 shadow-xs">
+                  <img src={adminAfterImage} alt="Officer Resolution Photo" className="w-full h-full object-cover" />
+                  <span className="absolute top-1.5 right-1.5 bg-emerald-600 text-white text-[9px] font-bold px-2 py-0.5 rounded shadow">
+                    Ready to Save &amp; Publish
+                  </span>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-xl p-3 bg-white hover:bg-blue-50/40 transition cursor-pointer">
+                  <UploadCloud className="w-5 h-5 text-slate-400 mb-1" />
+                  <span className="text-xs font-bold text-slate-700">Attach Post-Remediation Inspection Photo</span>
+                  <span className="text-[10px] text-slate-400">PNG, JPG or WebP (Max 25MB)</span>
+                  <input type="file" accept="image/*" onChange={handleAdminImageUpload} className="hidden" />
+                </label>
+              )}
+            </div>
+          )}
+
           {/* Status Update Form */}
           <div className="bg-blue-50/80 border border-blue-200 p-4 rounded-xl space-y-3">
             <label className="block text-xs font-bold text-blue-950 uppercase tracking-wider">
@@ -678,7 +727,7 @@ export default function ComplaintModal({
               </div>
 
               <button
-                onClick={() => handleUpdate()}
+                onClick={() => handleUpdate({ status, afterImage: adminAfterImage || undefined })}
                 className="py-3 px-5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-md hover:shadow-lg transition duration-200 flex items-center justify-center gap-2 border border-emerald-600 shrink-0 cursor-pointer"
               >
                 <CheckCircle2 className="w-4 h-4" /> Save Status & Send Notification

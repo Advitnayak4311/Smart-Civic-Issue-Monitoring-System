@@ -39,30 +39,17 @@ export default function AdminDashboard() {
   const token = localStorage.getItem("token");
   const userRole = localStorage.getItem("userRole");
 
-  const [isEscalating, setIsEscalating] = useState(false);
+  const isAuthorizedOfficer =
+    Boolean(token) &&
+    token !== "null" &&
+    token !== "undefined" &&
+    (userRole === "officer" || userRole === "admin" || userRole === "superadmin");
 
   useEffect(() => {
-    fetchComplaints();
-  }, []);
-
-  const handleTriggerEscalations = async () => {
-    try {
-      setIsEscalating(true);
-      const res = await fetch("http://localhost:8000/api/admin/escalations/trigger", {
-        method: "POST",
-      });
-      const data = await res.json();
-      if (data.success) {
-        alert(data.message || "Escalation Engine evaluated active tickets.");
-        fetchComplaints();
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Error triggering escalation engine.");
-    } finally {
-      setIsEscalating(false);
+    if (isAuthorizedOfficer) {
+      fetchComplaints();
     }
-  };
+  }, [isAuthorizedOfficer]);
 
   const handleClearAllComplaints = async () => {
     if (!window.confirm("Are you sure you want to purge all active and closed grievance records? This action cannot be undone.")) {
@@ -92,28 +79,36 @@ export default function AdminDashboard() {
       .catch((err) => console.log(err));
   };
 
-  // If user is explicitly logged in as a citizen, display clean Access Denied banner with Officer Login link
-  if (userRole === "citizen") {
+  // Strictly enforce Officer authentication: block any unauthenticated guest or citizen
+  if (!isAuthorizedOfficer) {
     return (
       <div className="min-h-screen flex flex-col justify-between bg-slate-50">
         <div>
           <Navbar />
           <div className="max-w-xl mx-auto px-4 py-20 text-center space-y-6">
-            <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto border border-red-200">
+            <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto border border-red-200 shadow-xs">
               <ShieldAlert className="w-8 h-8" />
             </div>
             <div className="space-y-2">
               <h2 className="text-2xl font-black text-slate-900">Access Denied: Officer Login Required</h2>
               <p className="text-xs text-slate-600 leading-relaxed">
-                You must sign in as an authorized Municipal Officer or Administrator to access officer grievance records.
+                The Municipal Officer Dashboard and departmental grievance records are strictly restricted to authenticated Municipal Officers and Administrators. Please log in with official department credentials.
               </p>
             </div>
-            <button
-              onClick={() => navigate("/admin-login")}
-              className="py-3 px-6 bg-blue-900 hover:bg-blue-950 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center justify-center gap-2 mx-auto"
-            >
-              <Lock className="w-4 h-4 text-amber-400" /> Sign In at Officer Portal
-            </button>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+              <button
+                onClick={() => navigate("/admin-login")}
+                className="py-3 px-6 bg-blue-900 hover:bg-blue-950 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center justify-center gap-2 border border-blue-950"
+              >
+                <Lock className="w-4 h-4 text-amber-400" /> Officer Portal Sign In
+              </button>
+              <button
+                onClick={() => navigate("/")}
+                className="py-3 px-6 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-300 transition shadow-2xs"
+              >
+                Return to Public Portal
+              </button>
+            </div>
           </div>
         </div>
         <Footer />
@@ -243,14 +238,10 @@ export default function AdminDashboard() {
 
   const COLORS = ["#d97706", "#2563eb", "#6366f1", "#059669", "#10b981", "#dc2626"];
 
-  const highConfCount = safeComplaints.filter((c) => (c?.confidenceScore ?? 75) >= 80).length;
-  const medConfCount = safeComplaints.filter((c) => (c?.confidenceScore ?? 75) >= 50 && (c?.confidenceScore ?? 75) < 80).length;
-  const lowConfCount = safeComplaints.filter((c) => (c?.confidenceScore ?? 75) < 50).length;
-
-  const confidenceData = [
-    { name: "High Confidence (80%+)", value: highConfCount, fill: "#16a34a" },
-    { name: "Medium Confidence (50-79%)", value: medConfCount, fill: "#ea580c" },
-    { name: "Low Confidence (<50%)", value: lowConfCount, fill: "#dc2626" },
+  const priorityData = [
+    { name: "High Priority", value: safeComplaints.filter((c) => c?.priority === "High").length, fill: "#dc2626" },
+    { name: "Medium Priority", value: safeComplaints.filter((c) => c?.priority === "Medium").length, fill: "#d97706" },
+    { name: "Low Priority", value: safeComplaints.filter((c) => c?.priority === "Low").length, fill: "#2563eb" },
   ];
 
   // Dynamic monthly distribution
@@ -328,15 +319,6 @@ export default function AdminDashboard() {
               </button>
 
               <button
-                onClick={handleTriggerEscalations}
-                disabled={isEscalating}
-                className="flex items-center gap-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 px-3.5 py-2.5 rounded-xl transition shadow-sm border border-amber-500"
-              >
-                <AlertTriangle className="w-4 h-4 text-amber-200" />
-                {isEscalating ? "Escalating..." : "Run Auto-Escalation Engine"}
-              </button>
-
-              <button
                 onClick={handleExportCSV}
                 className="flex items-center gap-2 text-xs font-bold text-slate-200 hover:text-white bg-slate-800 hover:bg-slate-700 px-3.5 py-2.5 rounded-xl border border-slate-700 transition"
               >
@@ -381,7 +363,7 @@ export default function AdminDashboard() {
             chartData={chartData}
             COLORS={COLORS}
             monthlyData={monthlyData}
-            confidenceData={confidenceData}
+            priorityData={priorityData}
             departmentData={departmentCounts}
           />
 

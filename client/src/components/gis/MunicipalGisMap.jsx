@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { MapContainer, TileLayer, Marker, Popup, CircleMarker, useMap } from "react-leaflet";
+import { useState, useEffect, useRef } from "react";
+import { MapContainer, TileLayer, Marker, Popup, CircleMarker, LayerGroup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { MapPin, Filter, Layers, Flame, Search, ShieldCheck, Eye, Navigation } from "lucide-react";
@@ -79,8 +79,9 @@ const createLiveGpsPinIcon = () => {
   });
 };
 
-function MapFlyController({ targetCoords }) {
+function MapFlyController({ targetCoords, markers }) {
   const map = useMap();
+  const prevCountRef = useRef(0);
 
   useEffect(() => {
     // Invalidate size after mount so map tiles load cleanly without grey boxes
@@ -92,13 +93,30 @@ function MapFlyController({ targetCoords }) {
 
   useEffect(() => {
     if (targetCoords && targetCoords.lat && targetCoords.lng) {
-      map.flyTo([targetCoords.lat, targetCoords.lng], 15, { duration: 1.5 });
+      map.flyTo([targetCoords.lat, targetCoords.lng], 14, { duration: 1.5 });
       const timer = setTimeout(() => {
         map.invalidateSize();
       }, 400);
       return () => clearTimeout(timer);
     }
   }, [targetCoords, map]);
+
+  // Automatically center map to actual registered complaints when markers are loaded or added
+  useEffect(() => {
+    if (Array.isArray(markers) && markers.length > 0) {
+      if (prevCountRef.current !== markers.length) {
+        prevCountRef.current = markers.length;
+        if (markers.length === 1) {
+          map.flyTo([markers[0].latitude, markers[0].longitude], 14, { duration: 1.2 });
+        } else {
+          const bounds = L.latLngBounds(markers.map((m) => [m.latitude, m.longitude]));
+          map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+        }
+      }
+    } else {
+      prevCountRef.current = 0;
+    }
+  }, [markers, map]);
 
   return null;
 }
@@ -128,19 +146,34 @@ export default function MunicipalGisMap({ onSelectComplaint }) {
       return;
     }
 
+    // Attempt 1: High accuracy GPS (5s timeout)
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
         await resolveLiveLocation(lat, lng, "High-Accuracy Device GPS");
       },
-      async (err) => {
-        console.log("GPS API note, attempting IP fallback:", err.message);
-        await fallbackIpLiveLocation();
+      (err) => {
+        console.log("GPS high accuracy note, trying standard accuracy:", err.message);
+        // Attempt 2: Standard/Cached browser location
+        navigator.geolocation.getCurrentPosition(
+          async (pos2) => {
+            await resolveLiveLocation(pos2.coords.latitude, pos2.coords.longitude, "Standard Device Location");
+          },
+          async (err2) => {
+            console.log("Standard location note, attempting IP fallback:", err2.message);
+            await fallbackIpLiveLocation();
+          },
+          {
+            enableHighAccuracy: false,
+            timeout: 8000,
+            maximumAge: 60000,
+          }
+        );
       },
       {
         enableHighAccuracy: true,
-        timeout: 10000,
+        timeout: 5000,
         maximumAge: 0,
       }
     );
@@ -148,16 +181,37 @@ export default function MunicipalGisMap({ onSelectComplaint }) {
 
   const fallbackIpLiveLocation = async () => {
     try {
-      const res = await fetch("https://ipapi.co/json/");
-      const data = await res.json();
-      if (data.latitude && data.longitude) {
-        await resolveLiveLocation(data.latitude, data.longitude, "Network IP Geolocation");
+      let lat = null;
+      let lng = null;
+
+      try {
+        const res = await fetch("https://ipwho.is/");
+        const data = await res.json();
+        if (data.success && data.latitude && data.longitude) {
+          lat = parseFloat(data.latitude);
+          lng = parseFloat(data.longitude);
+        }
+      } catch (e) {}
+
+      if (!lat || !lng) {
+        try {
+          const res2 = await fetch("https://freeipapi.com/api/json");
+          const data2 = await res2.json();
+          if (data2.latitude && data2.longitude) {
+            lat = parseFloat(data2.latitude);
+            lng = parseFloat(data2.longitude);
+          }
+        } catch (e) {}
+      }
+
+      if (lat && lng) {
+        await resolveLiveLocation(lat, lng, "Network IP Geolocation");
       } else {
-        alert("Location access restricted. Please allow browser location permissions.");
+        alert("Location access restricted. You can search your city/area in the search box above.");
         setIsDetectingLive(false);
       }
     } catch (e) {
-      alert("Unable to detect location. Please enable browser permissions.");
+      alert("Unable to detect location. Please use the search bar above to locate your area.");
       setIsDetectingLive(false);
     }
   };
@@ -456,88 +510,191 @@ export default function MunicipalGisMap({ onSelectComplaint }) {
           </select>
 
           {/* Mode Selector - Both (Heatmap + Pins), Pin Markers, or Heatmap */}
-          <div className="flex bg-slate-800 p-0.5 rounded-lg border border-slate-700 text-slate-300 text-[11px] font-bold">
+          <div className="flex items-center bg-slate-800/90 p-1 rounded-xl border border-slate-700 text-slate-300 text-xs font-bold gap-1 shadow-inner">
             <button
+              type="button"
               onClick={() => setMapMode("both")}
-              className={`px-2.5 py-1 rounded-md transition ${
-                mapMode === "both" ? "bg-blue-600 text-white shadow-xs" : "hover:text-white"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-200 cursor-pointer ${
+                mapMode === "both"
+                  ? "bg-blue-600 text-white shadow-md ring-2 ring-blue-400/40 font-extrabold scale-102"
+                  : "hover:text-white hover:bg-slate-700/60"
               }`}
               title="Show Both Heatmap Density and Pin Markers"
             >
-              Both (Heatmap + Pins)
+              <Layers className="w-3.5 h-3.5" />
+              <span>Both (Heatmap + Pins)</span>
             </button>
             <button
+              type="button"
               onClick={() => setMapMode("markers")}
-              className={`px-2.5 py-1 rounded-md transition ${
-                mapMode === "markers" ? "bg-blue-600 text-white shadow-xs" : "hover:text-white"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-200 cursor-pointer ${
+                mapMode === "markers"
+                  ? "bg-indigo-600 text-white shadow-md ring-2 ring-indigo-400/40 font-extrabold scale-102"
+                  : "hover:text-white hover:bg-slate-700/60"
               }`}
               title="Show Pin Markers Only"
             >
-              Pin Markers
+              <MapPin className="w-3.5 h-3.5" />
+              <span>Pin Markers</span>
             </button>
             <button
+              type="button"
               onClick={() => setMapMode("heatmap")}
-              className={`px-2.5 py-1 rounded-md transition ${
-                mapMode === "heatmap" ? "bg-red-600 text-white shadow-xs" : "hover:text-white"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-200 cursor-pointer ${
+                mapMode === "heatmap"
+                  ? "bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-md ring-2 ring-red-400/40 font-extrabold scale-102"
+                  : "hover:text-white hover:bg-slate-700/60"
               }`}
-              title="Show Heat Density Circles Only"
+              title="Show Thermal Heatmap Density Visualization"
             >
-              Heatmap
+              <Flame className="w-3.5 h-3.5 animate-pulse" />
+              <span>Heatmap</span>
             </button>
           </div>
         </div>
       </div>
 
       {/* Leaflet Map Box */}
-      <div className="w-full h-[520px] rounded-xl overflow-hidden border border-slate-200 relative z-10">
+      <div className="w-full h-[540px] rounded-xl overflow-hidden border border-slate-200 relative z-10">
+        {/* On-Map Dynamic HUD Layer Status Badge */}
+        <div className="absolute top-3 right-3 z-[1000] pointer-events-none">
+          <div className={`px-3 py-1.5 rounded-xl text-xs font-black shadow-lg backdrop-blur-md border flex items-center gap-2 transition-all duration-300 ${
+            mapMode === "both"
+              ? "bg-slate-900/90 text-blue-300 border-blue-500/40 shadow-blue-950/40"
+              : mapMode === "markers"
+              ? "bg-slate-900/90 text-indigo-300 border-indigo-500/40 shadow-indigo-950/40"
+              : "bg-slate-900/90 text-amber-300 border-amber-500/40 shadow-red-950/40"
+          }`}>
+            {mapMode === "both" && (
+              <>
+                <Layers className="w-4 h-4 text-blue-400" />
+                <span>Dual Layer: Pin Markers & Radiant Heatmap Active</span>
+              </>
+            )}
+            {mapMode === "markers" && (
+              <>
+                <MapPin className="w-4 h-4 text-indigo-400" />
+                <span>Pin Markers Layer Active ({filteredMarkers.length} Pins)</span>
+              </>
+            )}
+            {mapMode === "heatmap" && (
+              <>
+                <Flame className="w-4 h-4 text-orange-400 animate-pulse" />
+                <span>Thermal Heat Density Layer Active ({filteredMarkers.length} Heat Zones)</span>
+              </>
+            )}
+          </div>
+        </div>
+
         {loading ? (
           <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-500 font-bold text-xs">
             Loading Spatial GIS Layers & Real-time Complaints...
           </div>
         ) : (
           <MapContainer center={centerPosition} zoom={12} scrollWheelZoom={true} className="w-full h-full">
-            <MapFlyController targetCoords={targetCoords} />
+            <MapFlyController targetCoords={targetCoords} markers={filteredMarkers} />
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
 
-            {/* Heatmap Density Circles View (Shown in 'both' or 'heatmap' mode) */}
+            {/* Radiant Thermal Heatmap Density Layers (Shown in 'both' or 'heatmap' mode) */}
             {(mapMode === "both" || mapMode === "heatmap") &&
               filteredMarkers.map((m) => {
-                let circleColor = "#16a34a"; // Low
-                let radius = 22;
-                if (m.impactScore >= 150) { circleColor = "#dc2626"; radius = 42; }
-                else if (m.impactScore >= 100) { circleColor = "#ea580c"; radius = 34; }
-                else if (m.impactScore >= 50) { circleColor = "#ca8a04"; radius = 26; }
+                const isHeatmapOnly = mapMode === "heatmap";
+                const impact = m.impactScore || 50;
+
+                let outerRadius = isHeatmapOnly ? 85 : 65;
+                let midRadius = isHeatmapOnly ? 48 : 36;
+                let coreRadius = isHeatmapOnly ? 22 : 14;
+                let outerColor = "#10b981";
+                let midColor = "#059669";
+                let coreColor = "#047857";
+                let intensityLabel = "Standard Activity";
+
+                if (impact >= 120) {
+                  outerRadius = isHeatmapOnly ? 100 : 80;
+                  midRadius = isHeatmapOnly ? 58 : 44;
+                  coreRadius = isHeatmapOnly ? 28 : 18;
+                  outerColor = "#ef4444";
+                  midColor = "#dc2626";
+                  coreColor = "#b91c1c";
+                  intensityLabel = "Critical Emergency Core";
+                } else if (impact >= 80) {
+                  outerRadius = isHeatmapOnly ? 88 : 70;
+                  midRadius = isHeatmapOnly ? 50 : 38;
+                  coreRadius = isHeatmapOnly ? 24 : 16;
+                  outerColor = "#f97316";
+                  midColor = "#ea580c";
+                  coreColor = "#c2410c";
+                  intensityLabel = "High-Intensity Hotspot";
+                } else if (impact >= 40) {
+                  outerRadius = isHeatmapOnly ? 75 : 58;
+                  midRadius = isHeatmapOnly ? 42 : 32;
+                  coreRadius = isHeatmapOnly ? 20 : 13;
+                  outerColor = "#eab308";
+                  midColor = "#ca8a04";
+                  coreColor = "#a16207";
+                  intensityLabel = "Moderate Density Zone";
+                }
 
                 return (
-                  <CircleMarker
-                    key={`heat-${m._id}`}
-                    center={[m.latitude, m.longitude]}
-                    radius={radius}
-                    pathOptions={{
-                      fillColor: circleColor,
-                      color: circleColor,
-                      weight: 1.5,
-                      opacity: 0.7,
-                      fillOpacity: mapMode === "heatmap" ? 0.6 : 0.35,
-                    }}
-                  >
-                    <Popup className="custom-gis-popup">
-                      <div className="p-1 space-y-1 text-xs">
-                        <div className="flex justify-between items-center border-b border-slate-100 pb-1">
-                          <span className="font-extrabold text-red-600 uppercase text-[10px]">🔥 Heat Density Zone</span>
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
-                            Impact: {m.impactScore}
-                          </span>
+                  <LayerGroup key={`thermal-group-${m._id}`}>
+                    {/* Layer 1: Outer Radiant Heat Diffusion Halo */}
+                    <CircleMarker
+                      center={[m.latitude, m.longitude]}
+                      radius={outerRadius}
+                      pathOptions={{
+                        fillColor: outerColor,
+                        color: outerColor,
+                        weight: 1,
+                        opacity: isHeatmapOnly ? 0.35 : 0.22,
+                        fillOpacity: isHeatmapOnly ? 0.25 : 0.15,
+                      }}
+                    />
+
+                    {/* Layer 2: Mid-range Thermal Density Halo */}
+                    <CircleMarker
+                      center={[m.latitude, m.longitude]}
+                      radius={midRadius}
+                      pathOptions={{
+                        fillColor: midColor,
+                        color: midColor,
+                        weight: 1.5,
+                        opacity: isHeatmapOnly ? 0.55 : 0.38,
+                        fillOpacity: isHeatmapOnly ? 0.45 : 0.28,
+                      }}
+                    />
+
+                    {/* Layer 3: Core Thermal Hotspot with Interactive Details */}
+                    <CircleMarker
+                      center={[m.latitude, m.longitude]}
+                      radius={coreRadius}
+                      pathOptions={{
+                        fillColor: coreColor,
+                        color: "#ffffff",
+                        weight: 2,
+                        opacity: 0.9,
+                        fillOpacity: isHeatmapOnly ? 0.85 : 0.6,
+                      }}
+                    >
+                      <Popup className="custom-gis-popup">
+                        <div className="p-1 space-y-1 text-xs">
+                          <div className="flex justify-between items-center border-b border-slate-100 pb-1">
+                            <span className="font-extrabold text-red-600 uppercase text-[10px] flex items-center gap-1">
+                              <Flame className="w-3 h-3 text-red-600 animate-pulse" /> {intensityLabel}
+                            </span>
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
+                              Impact: {m.impactScore}
+                            </span>
+                          </div>
+                          <p className="font-bold text-slate-900 text-sm">{m.category} &rsaquo; {m.issue}</p>
+                          <p className="text-[11px] text-slate-600"><b>Location:</b> {m.ward} ({m.address})</p>
+                          <p className="text-[10px] text-slate-500 font-medium">Status: {m.status} | Dept: {m.department}</p>
                         </div>
-                        <p className="font-bold text-slate-900 text-sm">{m.category} &rsaquo; {m.issue}</p>
-                        <p className="text-[11px] text-slate-600"><b>Location:</b> {m.ward} ({m.address})</p>
-                        <p className="text-[10px] text-slate-500 font-medium">Status: {m.status} | Dept: {m.department}</p>
-                      </div>
-                    </Popup>
-                  </CircleMarker>
+                      </Popup>
+                    </CircleMarker>
+                  </LayerGroup>
                 );
               })}
 
@@ -545,7 +702,7 @@ export default function MunicipalGisMap({ onSelectComplaint }) {
             {(mapMode === "both" || mapMode === "markers") &&
               filteredMarkers.map((m) => (
                 <Marker
-                  key={m._id}
+                  key={`pin-${m._id}`}
                   position={[m.latitude, m.longitude]}
                   icon={createCustomIcon(m.status)}
                 >
@@ -562,9 +719,8 @@ export default function MunicipalGisMap({ onSelectComplaint }) {
                       <p className="text-[11px] text-slate-600"><b>Department:</b> {m.department}</p>
                       <p className="text-[11px] text-slate-600"><b>Location:</b> {m.ward} ({m.address})</p>
 
-                      <div className="grid grid-cols-2 gap-1 text-[10px] bg-slate-50 p-1.5 rounded border border-slate-200">
-                        <div><b>Impact Score:</b> <span className="text-red-700 font-bold">{m.impactScore}</span></div>
-                        <div><b>Confidence:</b> <span className="text-emerald-700 font-bold">{m.confidenceScore}%</span></div>
+                      <div className="text-[10px] bg-slate-50 p-1.5 rounded border border-slate-200">
+                        <b>Impact Score:</b> <span className="text-red-700 font-bold">{m.impactScore}</span>
                       </div>
 
                       {onSelectComplaint && (
@@ -633,7 +789,18 @@ export default function MunicipalGisMap({ onSelectComplaint }) {
             )}
           </MapContainer>
         )}
+
+        {/* Empty State Overlay when 0 complaints exist */}
+        {!loading && filteredMarkers.length === 0 && (
+          <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-[1000] bg-slate-900/90 backdrop-blur-md text-white px-4 py-2 rounded-xl border border-slate-700 shadow-xl flex items-center gap-2.5 text-xs pointer-events-none">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="font-semibold text-slate-200">
+              0 Active Grievances in this view &mdash; Registered complaints appear here dynamically at their exact reported locations.
+            </span>
+          </div>
+        )}
       </div>
+
 
       {/* Legend Footer */}
       <div className="flex flex-wrap items-center justify-between text-xs font-bold text-slate-600 border-t border-slate-100 pt-3">

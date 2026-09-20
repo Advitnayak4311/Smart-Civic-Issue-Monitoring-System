@@ -43,11 +43,15 @@ export default function DepartmentPerformanceGrid() {
   };
 
   const sortedDepartments = [...departments].sort((a, b) => {
-    if (sortBy === "grade") return a.slaCompliancePercent < b.slaCompliancePercent ? 1 : -1;
+    if (sortBy === "grade") return (b.slaCompliancePercent || -1) - (a.slaCompliancePercent || -1);
     if (sortBy === "pending") return b.pending - a.pending;
-    if (sortBy === "sla") return b.slaCompliancePercent - a.slaCompliancePercent;
-    if (sortBy === "speed") return parseFloat(a.avgResolutionDays) - parseFloat(b.avgResolutionDays);
-    if (sortBy === "rating") return parseFloat(b.citizenRating) - parseFloat(a.citizenRating);
+    if (sortBy === "sla") return (b.slaCompliancePercent || -1) - (a.slaCompliancePercent || -1);
+    if (sortBy === "speed") {
+      const spdA = a.avgResolutionDays ? parseFloat(a.avgResolutionDays) : 999;
+      const spdB = b.avgResolutionDays ? parseFloat(b.avgResolutionDays) : 999;
+      return spdA - spdB;
+    }
+    if (sortBy === "rating") return (parseFloat(b.citizenRating) || 0) - (parseFloat(a.citizenRating) || 0);
     return 0;
   });
 
@@ -61,6 +65,8 @@ export default function DepartmentPerformanceGrid() {
         return "bg-amber-500 text-white border-amber-600 shadow-sm";
       case "C":
         return "bg-orange-500 text-white border-orange-600 shadow-sm";
+      case "Unrated":
+        return "bg-slate-200 text-slate-700 border-slate-300 shadow-none text-xs";
       default:
         return "bg-red-600 text-white border-red-700 shadow-sm";
     }
@@ -149,12 +155,16 @@ export default function DepartmentPerformanceGrid() {
                 <div className="grid grid-cols-2 gap-3 text-xs">
                   <div className="bg-white p-2.5 rounded-xl border border-slate-200/70 space-y-0.5">
                     <span className="text-[10px] font-bold text-slate-400 uppercase">SLA Compliance</span>
-                    <p className="font-extrabold text-emerald-700 text-base">{dept.slaCompliancePercent}%</p>
+                    <p className={`font-extrabold text-base ${dept.slaCompliancePercent !== null ? "text-emerald-700" : "text-slate-400"}`}>
+                      {dept.slaCompliancePercent !== null ? `${dept.slaCompliancePercent}%` : "—"}
+                    </p>
                   </div>
 
                   <div className="bg-white p-2.5 rounded-xl border border-slate-200/70 space-y-0.5">
                     <span className="text-[10px] font-bold text-slate-400 uppercase">Avg Speed</span>
-                    <p className="font-extrabold text-blue-900 text-base">{dept.avgResolutionDays} Days</p>
+                    <p className={`font-extrabold text-base ${dept.avgResolutionDays !== null ? "text-blue-900" : "text-slate-400"}`}>
+                      {dept.avgResolutionDays !== null ? `${dept.avgResolutionDays} Days` : "—"}
+                    </p>
                   </div>
 
                   <div className="bg-white p-2.5 rounded-xl border border-slate-200/70 space-y-0.5">

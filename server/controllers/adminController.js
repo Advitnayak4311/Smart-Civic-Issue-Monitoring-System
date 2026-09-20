@@ -7,13 +7,8 @@ import {
 } from "../utils/emailTemplates.js";
 import { v4 as uuidv4 } from "uuid";
 import {
-  calculateConfidenceScore,
   calculateImpactScore,
 } from "../utils/scoreCalculator.js";
-import {
-  getSlaLimitForCategory,
-  checkAndTriggerEscalations,
-} from "../utils/escalationEngine.js";
 
 // =========================
 // Get All Complaints
@@ -36,8 +31,6 @@ export const getAllComplaints = async (req, res) => {
     }
 
     let sortOptions = { createdAt: -1 };
-    if (sortBy === "confidence_desc") sortOptions = { confidenceScore: -1, createdAt: -1 };
-    if (sortBy === "confidence_asc") sortOptions = { confidenceScore: 1, createdAt: -1 };
     if (sortBy === "impact_desc") sortOptions = { impactScore: -1, createdAt: -1 };
     if (sortBy === "impact_asc") sortOptions = { impactScore: 1, createdAt: -1 };
     if (sortBy === "support_desc") sortOptions = { supportCount: -1, createdAt: -1 };
@@ -47,11 +40,6 @@ export const getAllComplaints = async (req, res) => {
     // Dynamic fallback for legacy records missing score fields
     complaints = complaints.map((c) => {
       const doc = c.toObject();
-      if (!doc.confidenceScore || doc.confidenceScore === 0) {
-        const conf = calculateConfidenceScore(doc);
-        doc.confidenceScore = conf.score;
-        doc.confidenceLevel = conf.level;
-      }
       if (!doc.impactScore || doc.impactScore === 0) {
         const imp = calculateImpactScore(doc);
         doc.impactScore = imp.score;
@@ -84,7 +72,16 @@ export const updateComplaint = async (req, res) => {
     console.log("========== UPDATE API HIT ==========");
 
     const { id } = req.params;
-    const { status, department, transferRemarks, priority, notifyAuthority } = req.body;
+    const {
+      status,
+      department,
+      transferRemarks,
+      priority,
+      notifyAuthority,
+      afterImage,
+      resolutionProof,
+      resolutionNotes,
+    } = req.body;
 
     console.log("Complaint ID:", id);
     console.log("New Status:", status, "Department:", department);
@@ -97,6 +94,21 @@ export const updateComplaint = async (req, res) => {
         success: false,
         message: "Complaint not found",
       });
+    }
+
+    const resolvedAfter = afterImage || resolutionProof;
+    if (resolvedAfter) {
+      complaint.afterImage = resolvedAfter;
+      complaint.resolutionProof = resolvedAfter;
+      if (!Array.isArray(complaint.imageList)) {
+        complaint.imageList = complaint.imageUrl ? [complaint.imageUrl] : [];
+      }
+      if (!complaint.imageList.includes(resolvedAfter)) {
+        complaint.imageList.push(resolvedAfter);
+      }
+    }
+    if (resolutionNotes) {
+      complaint.resolutionNotes = resolutionNotes;
     }
 
     const oldDept = complaint.department;
@@ -349,22 +361,10 @@ export const getAnalyticsStats = async (req, res) => {
   try {
     const allComplaints = await Complaint.find().lean();
 
-    // 1. Average Confidence & Confidence Distribution
-    let totalConfidence = 0;
-    const confidenceDist = { High: 0, Medium: 0, Low: 0 };
     const impactDist = { Critical: 0, High: 0, Medium: 0, Low: 0 };
     const deptImpactMap = {};
 
     allComplaints.forEach((c) => {
-      // Calculate scores dynamically if missing
-      let confScore = c.confidenceScore;
-      let confLvl = c.confidenceLevel;
-      if (!confScore || confScore === 0) {
-        const conf = calculateConfidenceScore(c);
-        confScore = conf.score;
-        confLvl = conf.level;
-      }
-
       let impScore = c.impactScore;
       let impLvl = c.impactLevel;
       if (!impScore || impScore === 0) {
@@ -373,16 +373,11 @@ export const getAnalyticsStats = async (req, res) => {
         impLvl = imp.level;
       }
 
-      totalConfidence += confScore;
-      if (confidenceDist[confLvl] !== undefined) confidenceDist[confLvl]++;
-
       if (impactDist[impLvl] !== undefined) impactDist[impLvl]++;
 
       const dept = c.department || "General";
       deptImpactMap[dept] = (deptImpactMap[dept] || 0) + impScore;
     });
-
-    const avgConfidence = allComplaints.length > 0 ? Math.round(totalConfidence / allComplaints.length) : 0;
 
     // 2. Department Impact Chart Format
     const departmentImpact = Object.keys(deptImpactMap).map((dept) => ({
@@ -394,39 +389,13 @@ export const getAnalyticsStats = async (req, res) => {
     const topSupportedComplaints = await Complaint.find()
       .sort({ supportCount: -1, impactScore: -1 })
       .limit(10)
-      .select("complaintId category issue department status supportCount impactScore impactLevel confidenceScore confidenceLevel location address citizenName createdAt")
+      .select("complaintId category issue department status supportCount impactScore impactLevel location address citizenName createdAt")
       .lean();
 
     return res.status(200).json({
       success: true,
       stats: {
         totalComplaints: allComplaints.length,
-        averageConfidence: avgConfidence,
-        confidenceDistribution: [
-          { name: "High Confidence (80%+)", value: confidenceDist.High, color: "#16a34a" },
-          { name: "Medium Confidence (50-79%)", value: confidenceDist.Medium, color: "#ea580c" },
-          { name: "Low Confidence (<50%)", value: confidenceDist.Low, color: "#dc2626" },
-        ],
-        impactDistribution: [
-          { name: "Critical (151+)", value: impactDist.Critical, color: "#dc2626" },
-          { name: "High (101-150)", value: impactDist.High, color: "#9333ea" },
-          { name: "Medium (51-100)", value: impactDist.Medium, color: "#2563eb" },
-          { name: "Low (0-50)", value: impactDist.Low, color: "#64748b" },
-        ],
-        departmentImpact,
-        topSupportedComplaints,
-      },
-    });
-    return res.status(200).json({
-      success: true,
-      stats: {
-        totalComplaints: allComplaints.length,
-        averageConfidence: avgConfidence,
-        confidenceDistribution: [
-          { name: "High Confidence (80%+)", value: confidenceDist.High, color: "#16a34a" },
-          { name: "Medium Confidence (50-79%)", value: confidenceDist.Medium, color: "#ea580c" },
-          { name: "Low Confidence (<50%)", value: confidenceDist.Low, color: "#dc2626" },
-        ],
         impactDistribution: [
           { name: "Critical (151+)", value: impactDist.Critical, color: "#dc2626" },
           { name: "High (101-150)", value: impactDist.High, color: "#9333ea" },
@@ -466,9 +435,9 @@ export const getDepartmentPerformance = async (req, res) => {
           completed: 0,
           closed: 0,
           resolvedWithinSla: 0,
+          breachedTickets: 0,
           totalResolved: 0,
           totalResolutionDays: 0,
-          totalConfidence: 0,
           totalImpact: 0,
           totalRating: 0,
           ratingCount: 0,
@@ -488,7 +457,6 @@ export const getDepartmentPerformance = async (req, res) => {
 
       if (c.escalationLevel && c.escalationLevel > 0) d.escalatedCount++;
 
-      d.totalConfidence += c.confidenceScore || 75;
       d.totalImpact += c.impactScore || 45;
 
       // Only include feedback from verified or closed complaints where the citizen actually provided rating/feedback
@@ -514,7 +482,9 @@ export const getDepartmentPerformance = async (req, res) => {
         });
       }
 
+      const slaLimit = c.slaLimitHours || getSlaLimitForCategory(c.category, c.issue);
       const isResolved = c.status === "Completed" || c.status === "Closed" || c.citizenVerified === "Yes";
+
       if (isResolved) {
         d.totalResolved++;
         const createdDate = new Date(c.createdAt).getTime();
@@ -523,9 +493,17 @@ export const getDepartmentPerformance = async (req, res) => {
         
         d.totalResolutionDays += resolutionHours / 24;
 
-        const slaLimit = c.slaLimitHours || getSlaLimitForCategory(c.category, c.issue);
         if (resolutionHours <= slaLimit) {
           d.resolvedWithinSla++;
+        } else {
+          d.breachedTickets++;
+        }
+      } else {
+        // Active unresolved ticket - check if current elapsed hours have already breached SLA
+        const createdDate = new Date(c.createdAt).getTime();
+        const elapsedHours = (Date.now() - createdDate) / (1000 * 60 * 60);
+        if (elapsedHours > slaLimit) {
+          d.breachedTickets++;
         }
       }
     });
@@ -533,18 +511,46 @@ export const getDepartmentPerformance = async (req, res) => {
     const performanceGrid = Object.keys(deptMap).map((key) => {
       const d = deptMap[key];
 
-      const resolutionRate = d.totalAssigned > 0 ? Math.round(((d.completed + d.closed) / d.totalAssigned) * 100) : 100;
-      const slaCompliancePercent = d.totalResolved > 0 ? Math.round((d.resolvedWithinSla / d.totalResolved) * 100) : 100;
-      const avgResolutionDays = d.totalResolved > 0 ? (d.totalResolutionDays / d.totalResolved).toFixed(1) : "1.8";
+      const evaluableTickets = d.resolvedWithinSla + d.breachedTickets;
+      const hasResolvedTickets = d.totalResolved > 0;
+      const hasAssignedTickets = d.totalAssigned > 0;
+
+      // Authentic SLA Compliance % Calculation
+      let slaCompliancePercent = null;
+      if (evaluableTickets > 0) {
+        slaCompliancePercent = Math.round((d.resolvedWithinSla / evaluableTickets) * 100);
+      } else if (hasResolvedTickets) {
+        slaCompliancePercent = 100;
+      } else if (hasAssignedTickets) {
+        // Has active assigned tickets, none have breached yet
+        slaCompliancePercent = 100;
+      } else {
+        // No assigned tickets in this department yet
+        slaCompliancePercent = null;
+      }
+
+      // Authentic Average Speed (Days)
+      const avgResolutionDays = hasResolvedTickets
+        ? (d.totalResolutionDays / d.totalResolved).toFixed(1)
+        : null;
+
+      const resolutionRate = hasAssignedTickets
+        ? Math.round(((d.completed + d.closed) / d.totalAssigned) * 100)
+        : null;
+
       const citizenRating = d.ratingCount > 0 ? (d.totalRating / d.ratingCount).toFixed(1) : null;
 
-      // Grade Formula
-      let grade = "A+";
-      if (slaCompliancePercent >= 95) grade = "A+";
-      else if (slaCompliancePercent >= 90) grade = "A";
-      else if (slaCompliancePercent >= 80) grade = "B";
-      else if (slaCompliancePercent >= 70) grade = "C";
-      else grade = "Needs Improvement";
+      // Dynamic Performance Grade Calculation
+      let grade = "Unrated";
+      if (!hasAssignedTickets && !hasResolvedTickets) {
+        grade = "Unrated";
+      } else if (slaCompliancePercent !== null) {
+        if (slaCompliancePercent >= 95) grade = "A+";
+        else if (slaCompliancePercent >= 90) grade = "A";
+        else if (slaCompliancePercent >= 80) grade = "B";
+        else if (slaCompliancePercent >= 70) grade = "C";
+        else grade = "Needs Improvement";
+      }
 
       return {
         department: d.name,
@@ -563,7 +569,6 @@ export const getDepartmentPerformance = async (req, res) => {
         feedbackList: d.feedbackList.sort((a, b) => new Date(b.verifiedDate) - new Date(a.verifiedDate)),
         grade,
         escalatedCount: d.escalatedCount,
-        avgConfidence: Math.round(d.totalConfidence / Math.max(1, d.totalAssigned)),
         avgImpact: Math.round(d.totalImpact / Math.max(1, d.totalAssigned)),
       };
     });
@@ -574,23 +579,6 @@ export const getDepartmentPerformance = async (req, res) => {
     });
   } catch (error) {
     console.error("Department Performance Error:", error);
-    return res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-// =========================
-// PHASE 2: TRIGGER AUTOMATIC ESCALATIONS API
-// =========================
-export const triggerEscalationsApi = async (req, res) => {
-  try {
-    const result = await checkAndTriggerEscalations();
-    return res.status(200).json({
-      success: true,
-      message: `Automatic Escalation Engine completed. ${result.count || 0} grievances evaluated and escalated.`,
-      escalatedCount: result.count || 0,
-    });
-  } catch (error) {
-    console.error("Trigger Escalation Error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };

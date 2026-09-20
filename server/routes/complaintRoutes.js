@@ -14,11 +14,15 @@ import {
   deleteComplaint,
   checkDuplicateComplaint,
   supportComplaint,
+  verifyEmailEndpoint,
 } from "../controllers/complaintController.js";
 
 // =========================================
 // Citizen Routes
 // =========================================
+
+// Real-time Email Domain Verification
+router.get("/verify-email", verifyEmailEndpoint);
 
 // Check Duplicate Complaint (<300ms SLA)
 router.post("/check-duplicate", checkDuplicateComplaint);

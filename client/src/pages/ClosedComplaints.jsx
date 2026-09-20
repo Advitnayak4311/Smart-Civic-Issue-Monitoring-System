@@ -8,7 +8,9 @@ import {
   FileSpreadsheet,
   CheckCircle2,
   RefreshCw,
-  Building2
+  Building2,
+  ShieldAlert,
+  Lock
 } from "lucide-react";
 
 import Navbar from "../components/Navbar";
@@ -19,12 +21,23 @@ import StatusBadge from "../components/UI/StatusBadge";
 export default function ClosedComplaints() {
   const navigate = useNavigate();
 
+  const token = localStorage.getItem("token");
+  const userRole = localStorage.getItem("userRole");
+
+  const isAuthorizedOfficer =
+    Boolean(token) &&
+    token !== "null" &&
+    token !== "undefined" &&
+    (userRole === "officer" || userRole === "admin" || userRole === "superadmin");
+
   const [complaints, setComplaints] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchClosedComplaints();
-  }, []);
+    if (isAuthorizedOfficer) {
+      fetchClosedComplaints();
+    }
+  }, [isAuthorizedOfficer]);
 
   const fetchClosedComplaints = async () => {
     try {
@@ -89,6 +102,42 @@ export default function ClosedComplaints() {
       alert("Delete operation failed.");
     }
   };
+
+  if (!isAuthorizedOfficer) {
+    return (
+      <div className="min-h-screen flex flex-col justify-between bg-slate-50">
+        <div>
+          <Navbar />
+          <div className="max-w-xl mx-auto px-4 py-20 text-center space-y-6">
+            <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto border border-red-200 shadow-xs">
+              <ShieldAlert className="w-8 h-8" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-2xl font-black text-slate-900">Access Denied: Officer Login Required</h2>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                The Municipal Closed Complaints Vault is strictly restricted to authenticated Municipal Officers and Administrators. Please log in with official department credentials.
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+              <button
+                onClick={() => navigate("/admin-login")}
+                className="py-3 px-6 bg-blue-900 hover:bg-blue-950 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center justify-center gap-2 border border-blue-950"
+              >
+                <Lock className="w-4 h-4 text-amber-400" /> Officer Portal Sign In
+              </button>
+              <button
+                onClick={() => navigate("/")}
+                className="py-3 px-6 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-300 transition shadow-2xs"
+              >
+                Return to Public Portal
+              </button>
+            </div>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col justify-between bg-slate-50">

@@ -164,14 +164,54 @@ export default function ProfilePage() {
         }
       },
       (error) => {
-        console.error("Geolocation error:", error);
-        setIsDetectingLocation(false);
-        setLocationStatus("GPS access denied or unavailable. Please enter address manually.");
-        alert("GPS Location Access: " + (error.message || "Please allow location permission in your browser."));
+        console.log("High-accuracy profile GPS note, attempting standard accuracy:", error.message);
+        navigator.geolocation.getCurrentPosition(
+          async (pos2) => {
+            const { latitude, longitude } = pos2.coords;
+            try {
+              const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`);
+              const data = await res.json();
+              setProfile((prev) => ({
+                ...prev,
+                address: data.display_name || prev.address,
+                latitude,
+                longitude,
+              }));
+              setLocationStatus(`✓ Live GPS Coords: ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
+            } catch (e) {} finally {
+              setIsDetectingLocation(false);
+            }
+          },
+          async () => {
+            // IP fallback
+            try {
+              const ipRes = await fetch("https://ipwho.is/");
+              const ipData = await ipRes.json();
+              if (ipData.success && ipData.latitude && ipData.longitude) {
+                setProfile((prev) => ({
+                  ...prev,
+                  address: `${ipData.city}, ${ipData.region}, ${ipData.country}`,
+                  city: ipData.city || prev.city,
+                  state: ipData.region || prev.state,
+                  latitude: ipData.latitude,
+                  longitude: ipData.longitude,
+                }));
+                setLocationStatus(`✓ Network Location: ${ipData.latitude.toFixed(4)}, ${ipData.longitude.toFixed(4)}`);
+              } else {
+                setLocationStatus("Location unavailable. Please select your address manually.");
+              }
+            } catch (err3) {
+              setLocationStatus("Location unavailable. Please select your address manually.");
+            } finally {
+              setIsDetectingLocation(false);
+            }
+          },
+          { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
+        );
       },
       {
         enableHighAccuracy: true,
-        timeout: 10000,
+        timeout: 5000,
         maximumAge: 0,
       }
     );
