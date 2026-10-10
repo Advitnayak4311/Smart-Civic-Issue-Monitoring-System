@@ -7,7 +7,7 @@ import { serviceConfigNoticeEmail } from "../utils/emailTemplates.js";
 // ==========================
 export const createService = async (req, res) => {
   try {
-    const { category, subcategory, department, priority } = req.body;
+    const { category, subcategory, department, priority, slaHours } = req.body;
 
     const exists = await ServiceConfig.findOne({ subcategory });
 
@@ -22,7 +22,8 @@ export const createService = async (req, res) => {
       category,
       subcategory,
       department,
-      priority,
+      priority: priority || "Medium",
+      slaHours: Number(slaHours) || (priority === "High" ? 24 : priority === "Low" ? 72 : 48),
     });
 
     // 📩 Send Service Rule Creation Notification Email

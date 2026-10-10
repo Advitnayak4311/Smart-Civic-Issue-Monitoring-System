@@ -675,37 +675,72 @@ export default function VerifyComplaint() {
               {/* Conditional Form: When NO is active (Reopen with Photo Evidence Upload) */}
               {selectedDecision === "no" && (
                 <div className="space-y-5 animate-in fade-in duration-150">
-                  {/* Rating for Incomplete Work */}
-                  <div className="space-y-2 bg-red-50/50 p-4 rounded-xl border border-red-200">
-                    <label className="text-xs font-extrabold text-slate-800 flex items-center justify-between">
-                      <span className="flex items-center gap-1.5">
-                        <Star className="w-4 h-4 text-red-600 fill-red-500" />
+                  {/* Rating for Incomplete Work (Same interactive design as YES) */}
+                  <div className="space-y-3 bg-red-50/60 p-4 rounded-2xl border border-red-200">
+                    <div className="flex justify-between items-center">
+                      <label className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                        <Star className="w-4 h-4 text-amber-500 fill-amber-400" />
                         Rate Current Condition of Issue:
-                      </span>
-                      <span className="text-[11px] font-bold text-red-700">
+                      </label>
+                      <span className="text-[11px] font-black text-amber-800 bg-amber-100/80 px-2.5 py-0.5 rounded-full border border-amber-300">
                         {getRatingLabel(hoverRating || rating)}
                       </span>
-                    </label>
+                    </div>
 
-                    <div className="flex items-center gap-2 pt-1">
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <button
-                          key={star}
-                          type="button"
-                          onClick={() => setRating(star)}
-                          onMouseEnter={() => setHoverRating(star)}
-                          onMouseLeave={() => setHoverRating(0)}
-                          className="p-1 rounded-lg hover:scale-110 transition focus:outline-none cursor-pointer"
-                        >
-                          <Star
-                            className={`w-7 h-7 ${
-                              star <= (hoverRating || rating)
-                                ? "fill-amber-400 text-amber-500"
-                                : "text-slate-300 hover:text-slate-400"
+                    <div className="flex flex-wrap items-center gap-3 pt-1">
+                      {/* Interactive 5 Stars */}
+                      <div className="flex items-center gap-1 bg-white p-2 rounded-xl border border-red-200 shadow-2xs">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <button
+                            key={star}
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setRating(star);
+                              setHoverRating(0);
+                            }}
+                            onMouseEnter={() => setHoverRating(star)}
+                            onMouseLeave={() => setHoverRating(0)}
+                            className="p-1.5 rounded-lg hover:scale-125 transition-transform focus:outline-none cursor-pointer"
+                            title={`Click to rate ${star} Star${star > 1 ? 's' : ''}`}
+                            aria-label={`Rate ${star} Stars`}
+                          >
+                            <Star
+                              className={`w-8 h-8 transition-colors duration-150 ${
+                                star <= (hoverRating || rating)
+                                  ? "fill-amber-400 text-amber-500 drop-shadow-xs"
+                                  : "text-slate-300 hover:text-slate-400"
+                              }`}
+                            />
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Numbered Quick Buttons */}
+                      <div className="flex items-center gap-1.5">
+                        {[1, 2, 3, 4, 5].map((score) => (
+                          <button
+                            key={score}
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setRating(score);
+                              setHoverRating(0);
+                            }}
+                            className={`w-8 h-8 rounded-xl text-xs font-black transition cursor-pointer ${
+                              rating === score
+                                ? "bg-amber-500 text-slate-950 ring-2 ring-amber-400 shadow-sm scale-105"
+                                : "bg-white text-slate-700 border border-slate-300 hover:bg-slate-100"
                             }`}
-                          />
-                        </button>
-                      ))}
+                          >
+                            {score}★
+                          </button>
+                        ))}
+                      </div>
+
+                      <span className="text-xs font-black text-red-950 bg-red-100 px-3 py-1.5 rounded-xl border border-red-300">
+                        Selected: {rating} / 5 Stars
+                      </span>
                     </div>
                   </div>
 

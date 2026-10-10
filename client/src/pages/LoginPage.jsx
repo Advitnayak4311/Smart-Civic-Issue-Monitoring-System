@@ -120,9 +120,7 @@ export default function LoginPage() {
                   <ShieldCheck className="w-4 h-4 text-amber-400" />
                   <span>Citizen Identity Vault</span>
                 </div>
-                <Link to="/admin-login" className="text-blue-300 hover:text-white font-semibold">
-                  Officer Login &rsaquo;
-                </Link>
+                <span className="text-slate-400">Secure 256-Bit SSL</span>
               </div>
             </div>
 

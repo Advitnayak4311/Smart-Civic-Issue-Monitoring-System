@@ -72,10 +72,17 @@ export default function AdminDashboard() {
     }
   };
 
+  const [resolvedCount, setResolvedCount] = useState(0);
+
   const fetchComplaints = () => {
     fetch("http://localhost:8000/api/admin/complaints")
       .then((res) => res.json())
-      .then((data) => setComplaints(data.data || []))
+      .then((data) => {
+        setComplaints(data.data || []);
+        if (typeof data.resolvedCount === "number") {
+          setResolvedCount(data.resolvedCount);
+        }
+      })
       .catch((err) => console.log(err));
   };
 
@@ -353,7 +360,7 @@ export default function AdminDashboard() {
         {/* Dashboard Body */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
           {/* Executive KPI Summary */}
-          <DashboardCards complaints={complaints} />
+          <DashboardCards complaints={complaints} resolvedCount={resolvedCount} />
 
           {/* Department Performance Index & Citizen Feedback */}
           <DepartmentPerformanceGrid />

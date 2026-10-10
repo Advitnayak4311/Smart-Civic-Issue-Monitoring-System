@@ -82,7 +82,11 @@ export default function Navbar() {
     localStorage.removeItem("userRole");
     setToken(null);
     setUserRole(null);
-    navigate("/admin-login");
+    if (isAdminPortalPage) {
+      navigate("/admin-login");
+    } else {
+      navigate("/");
+    }
   };
 
   const isActive = (path) => location.pathname === path;
@@ -412,16 +416,6 @@ export default function Navbar() {
                     <LogOut className="w-3.5 h-3.5" /> Logout
                   </button>
                 </div>
-              ) : isUserAdminRole ? (
-                /* If an admin is visiting the citizen portal, only show option to end session */
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleAdminLogout}
-                    className="flex items-center gap-1.5 bg-slate-100 hover:bg-red-50 hover:text-red-700 text-slate-700 font-bold text-xs px-3.5 py-2 rounded-lg border border-slate-300 transition cursor-pointer"
-                  >
-                    <LogOut className="w-3.5 h-3.5" /> End Admin Session
-                  </button>
-                </div>
               ) : (
                 <div className="flex items-center gap-2">
                   <Link
@@ -572,16 +566,6 @@ export default function Navbar() {
                 className="flex items-center justify-center gap-2 bg-red-700 text-white py-2.5 rounded-lg font-semibold text-xs cursor-pointer"
               >
                 <LogOut className="w-4 h-4" /> End Session
-              </button>
-            ) : isUserAdminRole ? (
-              <button
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  handleAdminLogout();
-                }}
-                className="flex items-center justify-center gap-2 bg-slate-100 hover:bg-red-50 text-slate-700 hover:text-red-700 py-2 rounded-lg font-semibold text-xs border border-slate-300 cursor-pointer"
-              >
-                <LogOut className="w-3.5 h-3.5" /> End Admin Session
               </button>
             ) : (
               <Link

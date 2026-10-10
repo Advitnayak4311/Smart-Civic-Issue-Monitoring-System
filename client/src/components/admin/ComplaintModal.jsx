@@ -487,12 +487,12 @@ export default function ComplaintModal({
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-2.5 pt-1">
+              <div className="pt-1">
                 <button
                   type="button"
                   disabled={isTransferring}
                   onClick={() => handleTransferOrNotify(false)}
-                  className="py-2.5 px-4 bg-indigo-900 hover:bg-indigo-950 disabled:opacity-50 text-white font-extrabold text-xs rounded-xl shadow-xs transition flex items-center gap-2 border border-indigo-800 cursor-pointer"
+                  className="w-full sm:w-auto py-2.5 px-5 bg-indigo-900 hover:bg-indigo-950 disabled:opacity-50 text-white font-extrabold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-2 border border-indigo-800 cursor-pointer"
                 >
                   <Send className="w-3.5 h-3.5 text-amber-300" />
                   {isTransferring
@@ -500,17 +500,6 @@ export default function ComplaintModal({
                     : selectedDept !== selectedComplaint.department
                     ? `Transfer & Dispatch to ${selectedDept}`
                     : `Notify ${selectedDept} Authority`}
-                </button>
-
-                <button
-                  type="button"
-                  disabled={isTransferring}
-                  onClick={() => handleTransferOrNotify(true)}
-                  className="py-2.5 px-3.5 bg-white hover:bg-slate-100 disabled:opacity-50 text-slate-800 font-bold text-xs rounded-xl border border-slate-300 shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
-                  title="Send immediate action reminder to currently assigned department"
-                >
-                  <RefreshCw className="w-3.5 h-3.5 text-blue-700" />
-                  Send Dispatch Alert to {selectedComplaint.department}
                 </button>
               </div>
             </div>

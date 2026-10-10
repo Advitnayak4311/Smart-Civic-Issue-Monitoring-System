@@ -24,6 +24,11 @@ const serviceConfigSchema = new mongoose.Schema(
       default: "Medium",
     },
 
+    slaHours: {
+      type: Number,
+      default: 48,
+    },
+
     isActive: {
       type: Boolean,
       default: true,

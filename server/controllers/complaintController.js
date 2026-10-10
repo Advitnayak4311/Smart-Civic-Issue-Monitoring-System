@@ -391,8 +391,8 @@ export const createComplaint = async (req, res) => {
       return "General Department";
     };
 
-    const resolveAutoPriority = (cat = "", iss = "") => {
-      const combined = `${cat} ${iss}`.toLowerCase();
+    const resolveAutoPriority = (cat = "", iss = "", remarksText = "") => {
+      const combined = `${cat} ${iss} ${remarksText}`.toLowerCase();
       if (
         combined.includes("burst") ||
         combined.includes("emergency") ||
@@ -402,9 +402,25 @@ export const createComplaint = async (req, res) => {
         combined.includes("open sewage") ||
         combined.includes("missing manhole") ||
         combined.includes("dangerous") ||
-        combined.includes("pothole")
+        combined.includes("pothole") ||
+        combined.includes("urgent") ||
+        combined.includes("critical") ||
+        combined.includes("live wire") ||
+        combined.includes("contamination")
       ) {
         return "High";
+      }
+      if (
+        combined.includes("routine") ||
+        combined.includes("bench") ||
+        combined.includes("park") ||
+        combined.includes("sweeping") ||
+        combined.includes("inquiry") ||
+        combined.includes("administrative") ||
+        combined.includes("speed breaker") ||
+        combined.includes("general")
+      ) {
+        return "Low";
       }
       return "Medium";
     };
@@ -423,7 +439,7 @@ export const createComplaint = async (req, res) => {
     }
 
     const autoDept = resolveAutoDepartment(category, issue);
-    const autoPriority = resolveAutoPriority(category, issue);
+    const autoPriority = resolveAutoPriority(category, issue, cleanRemarks);
 
     const priority = service?.priority || autoPriority;
     const department = (service?.department && service.department !== "General Department")
@@ -495,6 +511,10 @@ export const createComplaint = async (req, res) => {
 
     const impact = calculateImpactScore(tempComplaintData);
 
+    // If impact score/level is High (e.g., close to hospital/school or high community density), elevate priority to High
+    const finalPriority = (impact.level === "High" || impact.level === "Critical") ? "High" : priority;
+    const finalSlaLimitHours = service?.slaHours || (finalPriority === "High" ? 24 : finalPriority === "Low" ? 72 : 48);
+
     const complaint = await Complaint.create({
       complaintId,
 
@@ -503,7 +523,8 @@ export const createComplaint = async (req, res) => {
       category,
       issue,
       department,
-      priority,
+      priority: finalPriority,
+      slaLimitHours: finalSlaLimitHours,
 
       citizenName,
       phone: cleanPhone,

@@ -160,12 +160,21 @@ export default function ClosedComplaints() {
               </p>
             </div>
 
-            <Link
-              to="/admin"
-              className="inline-flex items-center gap-2 text-xs font-bold text-slate-300 hover:text-white bg-slate-800 px-3.5 py-2 rounded-lg border border-slate-700 transition"
-            >
-              <ArrowLeft className="w-4 h-4" /> Officer Dashboard
-            </Link>
+            {isAuthorizedOfficer ? (
+              <Link
+                to="/admin"
+                className="inline-flex items-center gap-2 text-xs font-bold text-slate-300 hover:text-white bg-slate-800 px-3.5 py-2 rounded-lg border border-slate-700 transition"
+              >
+                <ArrowLeft className="w-4 h-4" /> Officer Dashboard
+              </Link>
+            ) : (
+              <Link
+                to="/"
+                className="inline-flex items-center gap-2 text-xs font-bold text-slate-300 hover:text-white bg-slate-800 px-3.5 py-2 rounded-lg border border-slate-700 transition"
+              >
+                <ArrowLeft className="w-4 h-4" /> Back to Home
+              </Link>
+            )}
           </div>
         </div>
 

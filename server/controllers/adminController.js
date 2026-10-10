@@ -17,10 +17,7 @@ export const getAllComplaints = async (req, res) => {
   try {
     const { sortBy, filterImpact, filterHighlyReported } = req.query;
 
-    let query = {
-      status: { $ne: "Closed" },
-      citizenVerified: { $ne: "Yes" },
-    };
+    let query = {};
 
     if (filterImpact && filterImpact !== "All") {
       query.impactLevel = filterImpact;
@@ -49,9 +46,18 @@ export const getAllComplaints = async (req, res) => {
       return doc;
     });
 
+    const resolvedCount = await Complaint.countDocuments({
+      $or: [
+        { status: "Completed" },
+        { status: "Closed" },
+        { citizenVerified: "Yes" },
+      ],
+    });
+
     return res.status(200).json({
       success: true,
       count: complaints.length,
+      resolvedCount,
       data: complaints,
     });
   } catch (error) {

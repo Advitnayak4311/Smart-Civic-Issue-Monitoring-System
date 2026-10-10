@@ -33,10 +33,10 @@ export default function HeroCards() {
         const list = data.data || [];
         if (list.length > 0) {
           const total = list.length;
-          const completed = list.filter(
-            (c) => c.status === "Completed" || c.status === "Closed"
-          ).length;
-          const rate = ((completed / total) * 100).toFixed(1) + "%";
+          const completed = typeof data.resolvedCount === "number" && data.resolvedCount > 0
+            ? data.resolvedCount
+            : list.filter((c) => c.status === "Completed" || c.status === "Closed" || c.citizenVerified === "Yes").length;
+          const rate = total > 0 ? ((completed / total) * 100).toFixed(1) + "%" : "100.0%";
           const depts = [...new Set(list.map((c) => c.department).filter(Boolean))].length || 5;
 
           setMetrics({

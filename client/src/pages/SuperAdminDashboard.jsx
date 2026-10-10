@@ -134,7 +134,7 @@ export default function SuperAdminDashboard() {
 
   // Metrics Calculations
   const totalComplaints = complaints.length;
-  const closedComplaints = complaints.filter(c => c.status === "Closed" || c.status === "Resolved").length;
+  const closedComplaints = complaints.filter(c => c.status === "Closed" || c.status === "Resolved" || c.status === "Completed" || c.citizenVerified === "Yes").length;
   const pendingComplaints = complaints.filter(c => c.status === "Pending").length;
   const inProgressComplaints = complaints.filter(c => c.status === "In Progress" || c.status === "Accepted").length;
   const resolutionRate = totalComplaints ? ((closedComplaints / totalComplaints) * 100).toFixed(1) : 100.0;

@@ -1,11 +1,19 @@
 import { FileText, Clock, CheckCircle2, ShieldAlert } from "lucide-react";
 
-export default function DashboardCards({ complaints }) {
+export default function DashboardCards({ complaints, resolvedCount }) {
   const safeComplaints = Array.isArray(complaints) ? complaints : [];
   const total = safeComplaints.length;
   const pending = safeComplaints.filter((c) => c?.status === "Pending").length;
-  const completed = safeComplaints.filter((c) => c?.status === "Completed").length;
-  const highPriority = safeComplaints.filter((c) => c?.priority === "High").length;
+  const completed =
+    typeof resolvedCount === "number" && resolvedCount > 0
+      ? resolvedCount
+      : safeComplaints.filter(
+          (c) =>
+            c?.status === "Completed" ||
+            c?.status === "Closed" ||
+            c?.citizenVerified === "Yes"
+        ).length;
+  const highPriority = safeComplaints.filter((c) => c?.priority === "High" && c?.status !== "Closed").length;
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">

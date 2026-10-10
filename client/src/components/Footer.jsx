@@ -12,7 +12,14 @@ export default function Footer() {
   const token = localStorage.getItem("token");
   const userRole = localStorage.getItem("userRole");
 
-  const isOfficerOrAdmin = token && (userRole === "officer" || userRole === "superadmin");
+  const isAdminRoute =
+    location.pathname.startsWith("/admin") ||
+    location.pathname.startsWith("/superadmin") ||
+    location.pathname.startsWith("/service-config") ||
+    location.pathname === "/ai-command";
+
+  const isOfficerOrAdmin =
+    isAdminRoute && Boolean(token) && (userRole === "officer" || userRole === "superadmin");
 
   // Modal State for Informational Footer Links
   const [modalType, setModalType] = useState(null);
