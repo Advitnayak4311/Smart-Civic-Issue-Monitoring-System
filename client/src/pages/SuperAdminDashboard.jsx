@@ -48,8 +48,9 @@ export default function SuperAdminDashboard() {
 
   // User Accounts Management (Citizens + Officers)
   const [users, setUsers] = useState([]);
+  const [deptDirectory, setDeptDirectory] = useState([]);
 
-  const [newUser, setNewUser] = useState({ name: "", email: "", role: "officer", department: "Roads & Infrastructure", phone: "" });
+  const [newUser, setNewUser] = useState({ name: "", email: "", role: "officer", department: "Roads & Highway Dept", phone: "" });
   const [showAddUserModal, setShowAddUserModal] = useState(false);
 
   useEffect(() => {
@@ -59,13 +60,15 @@ export default function SuperAdminDashboard() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [compRes, servRes] = await Promise.all([
+      const [compRes, servRes, deptRes] = await Promise.all([
         fetch("http://localhost:8000/api/admin/complaints"),
-        fetch("http://localhost:8000/api/service-config")
+        fetch("http://localhost:8000/api/service-config"),
+        fetch("http://localhost:8000/api/admin/department-directory"),
       ]);
 
       const compData = await compRes.json();
       const servData = await servRes.json();
+      const deptData = await deptRes.json();
 
       if (compData.success) {
         setComplaints(compData.complaints || compData.data || []);
@@ -73,11 +76,31 @@ export default function SuperAdminDashboard() {
       if (servData.success) {
         setServices(servData.services || []);
       }
+      if (deptData.success) {
+        setDeptDirectory(deptData.directory || []);
+        const officerUsers = (deptData.directory || []).map((d, idx) => ({
+          id: `OFF-${100 + idx}`,
+          name: d.officerName,
+          email: d.officerEmail,
+          role: "officer",
+          department: d.name,
+          phone: d.officerPhone,
+          status: "Active",
+          joined: "2026-01-15",
+        }));
+        setUsers(officerUsers);
+      }
     } catch (err) {
       console.error("SuperAdmin Fetch Error:", err);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleLaunchDepartmentPortal = (deptName, officerName) => {
+    localStorage.setItem("userDepartment", deptName);
+    if (officerName) localStorage.setItem("officerName", officerName);
+    navigate(`/admin?dept=${encodeURIComponent(deptName)}`);
   };
 
   if (!token || userRole !== "superadmin") {
@@ -224,6 +247,17 @@ export default function SuperAdminDashboard() {
                 <ShieldAlert className="w-4 h-4" /> Master Grievance Audit ({complaints.length})
               </button>
 
+              <button
+                onClick={() => setActiveTab("departments")}
+                className={`px-4 py-2.5 rounded-xl text-xs font-extrabold transition flex items-center gap-2 ${
+                  activeTab === "departments"
+                    ? "bg-amber-500 text-slate-950 shadow-md"
+                    : "bg-slate-800/60 text-slate-300 hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                <Building2 className="w-4 h-4" /> Department Portals ({deptDirectory.length || 12})
+              </button>
+
               <Link
                 to="/service-config"
                 className="px-4 py-2.5 rounded-xl text-xs font-extrabold bg-slate-800/60 text-slate-300 hover:bg-slate-800 hover:text-white transition flex items-center gap-2"
@@ -293,6 +327,167 @@ export default function SuperAdminDashboard() {
                 <p className="text-xs text-emerald-800">Successfully resolved and archived in ledger.</p>
               </div>
             </div>
+
+            {/* Department Portals Executive Overview */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-4 shadow-xs">
+              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                <div>
+                  <h3 className="font-extrabold text-base text-slate-900 flex items-center gap-2">
+                    <Building2 className="w-5 h-5 text-indigo-900" />
+                    <span>Municipal Department Portals Oversight</span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Click any department to inspect their dedicated officer portal and assigned grievances.
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => setActiveTab("departments")}
+                  className="text-xs font-extrabold text-indigo-900 hover:text-indigo-950 bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-200 transition"
+                >
+                  View All {deptDirectory.length} Portals &rarr;
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {deptDirectory.slice(0, 6).map((dept) => (
+                  <div
+                    key={dept.name}
+                    className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 hover:bg-white hover:shadow-md transition space-y-3"
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="space-y-0.5">
+                        <span className="text-[10px] font-black uppercase text-indigo-900 bg-indigo-100/70 px-2 py-0.5 rounded">
+                          {dept.name.split(" ")[0]}
+                        </span>
+                        <h4 className="font-extrabold text-slate-900 text-xs mt-1">{dept.name}</h4>
+                        <p className="text-[11px] text-slate-500 font-medium">Officer: {dept.officerName}</p>
+                      </div>
+                      <span className="text-[11px] font-black px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300">
+                        {dept.resolutionRate}% SLA
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-1.5 text-center text-[10px] bg-white p-2 rounded-lg border border-slate-200">
+                      <div>
+                        <span className="text-slate-400 block font-bold">TOTAL</span>
+                        <span className="font-black text-slate-900">{dept.totalCount}</span>
+                      </div>
+                      <div>
+                        <span className="text-amber-600 block font-bold">PENDING</span>
+                        <span className="font-black text-amber-900">{dept.pendingCount}</span>
+                      </div>
+                      <div>
+                        <span className="text-emerald-600 block font-bold">RESOLVED</span>
+                        <span className="font-black text-emerald-900">{dept.resolvedCount}</span>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => handleLaunchDepartmentPortal(dept.name, dept.officerName)}
+                      className="w-full py-2 bg-slate-900 hover:bg-indigo-950 text-white font-extrabold text-[11px] rounded-lg transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Building2 className="w-3.5 h-3.5 text-amber-400" />
+                      Launch {dept.name.split(" ")[0]} Portal
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tab: Department Portals Directory */}
+        {activeTab === "departments" && (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
+              <div>
+                <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                  <Building2 className="w-5 h-5 text-indigo-900" />
+                  <span>Municipal Department Portals Directory ({deptDirectory.length})</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Every municipal department maintains its own dedicated portal for field officers. Chief Commissioner can audit and enter any department below.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
+                  {deptDirectory.length} Active Departments
+                </span>
+              </div>
+            </div>
+
+            {/* Department Cards Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {deptDirectory.map((dept) => (
+                <div
+                  key={dept.name}
+                  className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs hover:shadow-lg transition space-y-4 flex flex-col justify-between"
+                >
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-start">
+                      <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-900 flex items-center justify-center font-black text-sm">
+                        <Building2 className="w-5 h-5 text-indigo-900" />
+                      </div>
+                      <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                        {dept.resolutionRate}% Compliance
+                      </span>
+                    </div>
+
+                    <div>
+                      <h4 className="font-black text-slate-900 text-sm leading-snug">{dept.name}</h4>
+                      <p className="text-[11px] text-slate-500 mt-0.5">{dept.designation}</p>
+                    </div>
+
+                    <div className="space-y-1 pt-2 border-t border-slate-100 text-xs">
+                      <div className="flex justify-between text-slate-600">
+                        <span className="font-semibold text-slate-500">Nodal Officer:</span>
+                        <span className="font-bold text-slate-900">{dept.officerName}</span>
+                      </div>
+                      <div className="flex justify-between text-slate-600">
+                        <span className="font-semibold text-slate-500">Official Email:</span>
+                        <span className="font-mono text-[11px] text-slate-700">{dept.officerEmail}</span>
+                      </div>
+                      <div className="flex justify-between text-slate-600">
+                        <span className="font-semibold text-slate-500">Helpline:</span>
+                        <span className="font-mono text-[11px] text-slate-700">{dept.officerPhone}</span>
+                      </div>
+                    </div>
+
+                    {/* Department Grievance Stats Box */}
+                    <div className="grid grid-cols-4 gap-1 text-center bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-[10px]">
+                      <div>
+                        <span className="text-slate-400 block font-bold">TOTAL</span>
+                        <span className="font-black text-slate-900 text-xs">{dept.totalCount}</span>
+                      </div>
+                      <div>
+                        <span className="text-amber-600 block font-bold">PENDING</span>
+                        <span className="font-black text-amber-900 text-xs">{dept.pendingCount}</span>
+                      </div>
+                      <div>
+                        <span className="text-blue-600 block font-bold">IN PROG</span>
+                        <span className="font-black text-blue-900 text-xs">{dept.inProgressCount}</span>
+                      </div>
+                      <div>
+                        <span className="text-emerald-600 block font-bold">CLOSED</span>
+                        <span className="font-black text-emerald-900 text-xs">{dept.resolvedCount}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <button
+                      onClick={() => handleLaunchDepartmentPortal(dept.name, dept.officerName)}
+                      className="w-full py-2.5 bg-slate-900 hover:bg-indigo-950 text-white font-extrabold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer border border-slate-950"
+                    >
+                      <Building2 className="w-4 h-4 text-amber-400" />
+                      Open {dept.name.split(" ")[0]} Portal &rarr;
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -302,7 +497,7 @@ export default function SuperAdminDashboard() {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
               <div>
                 <h3 className="text-lg font-extrabold text-slate-900">User Account & Role Management</h3>
-                <p className="text-xs text-slate-500">Monitor all citizen accounts and municipal officers. Promote or demote access permissions.</p>
+                <p className="text-xs text-slate-500">Monitor registered citizen accounts and authorized municipal department officers.</p>
               </div>
 
               <button
@@ -323,8 +518,7 @@ export default function SuperAdminDashboard() {
                       <th className="p-4">Email</th>
                       <th className="p-4">Current Role</th>
                       <th className="p-4">Department / Phone</th>
-                      <th className="p-4">Account Status</th>
-                      <th className="p-4 text-right">Role Actions</th>
+                      <th className="p-4 text-right">Account Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
@@ -350,33 +544,10 @@ export default function SuperAdminDashboard() {
                           <div className="font-semibold text-slate-900">{u.department || "Citizen Public"}</div>
                           <div className="text-[10px] text-slate-500">{u.phone}</div>
                         </td>
-                        <td className="p-4">
-                          <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-bold text-[10px] border border-emerald-200">
+                        <td className="p-4 text-right">
+                          <span className="text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full font-bold text-[10px] border border-emerald-200">
                             {u.status}
                           </span>
-                        </td>
-                        <td className="p-4 text-right space-x-2">
-                          {u.role === "citizen" && (
-                            <button
-                              onClick={() => handleUpdateRole(u.id, "officer")}
-                              className="px-2.5 py-1 bg-blue-50 text-blue-900 hover:bg-blue-100 border border-blue-200 rounded-lg text-[10px] font-bold transition"
-                            >
-                              Promote to Officer
-                            </button>
-                          )}
-                          {u.role === "officer" && (
-                            <button
-                              onClick={() => handleUpdateRole(u.id, "citizen")}
-                              className="px-2.5 py-1 bg-slate-100 text-slate-800 hover:bg-slate-200 border border-slate-300 rounded-lg text-[10px] font-bold transition"
-                            >
-                              Demote to Citizen
-                            </button>
-                          )}
-                          {u.role === "superadmin" && (
-                            <span className="text-[10px] text-amber-700 font-extrabold bg-amber-50 px-2 py-1 rounded border border-amber-200">
-                              System Owner
-                            </span>
-                          )}
                         </td>
                       </tr>
                     ))}

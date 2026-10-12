@@ -26,10 +26,12 @@ export default function Navbar() {
   const [fontSize, setFontSize] = useState("normal");
   const [token, setToken] = useState(localStorage.getItem("token"));
   const [userRole, setUserRole] = useState(localStorage.getItem("userRole"));
+  const [userDepartment, setUserDepartment] = useState(localStorage.getItem("userDepartment"));
 
   useEffect(() => {
     setToken(localStorage.getItem("token"));
     setUserRole(localStorage.getItem("userRole"));
+    setUserDepartment(localStorage.getItem("userDepartment"));
   }, [location]);
 
   const [selectedLang, setSelectedLang] = useState(() => {
@@ -194,13 +196,17 @@ export default function Navbar() {
         <div className="flex justify-between items-center h-20 gap-4">
           {/* Official Logo Branding */}
           <Link
-            to={isAdminPortalPage ? "/admin" : "/"}
+            to={isSuperAdminRoute ? "/superadmin" : isOfficerRoute || isAiCommandRoute ? "/admin" : "/"}
             className="flex items-center gap-3 shrink-0 group"
           >
             <div className={`w-11 h-11 rounded-xl flex items-center justify-center shadow-sm border group-hover:scale-105 transition-transform shrink-0 ${
-              isAdminPortalPage ? "bg-indigo-950 text-amber-400 border-indigo-900" : "bg-blue-900 text-amber-400 border-blue-950"
+              isSuperAdminRoute
+                ? "bg-amber-950 text-amber-400 border-amber-900"
+                : isOfficerRoute || isAiCommandRoute || isServiceConfigRoute
+                ? "bg-indigo-950 text-amber-400 border-indigo-900"
+                : "bg-blue-900 text-amber-400 border-blue-950"
             }`}>
-              <Building2 className="w-6 h-6" />
+              {isSuperAdminRoute ? <Crown className="w-6 h-6 text-amber-400" /> : <Building2 className="w-6 h-6" />}
             </div>
             <div className="flex flex-col">
               <div className="flex items-center gap-2">
@@ -208,16 +214,28 @@ export default function Navbar() {
                   Smart Civic
                 </span>
                 <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border shrink-0 ${
-                  isAdminPortalPage
-                    ? (isSuperAdminRoute ? "bg-amber-100 text-amber-950 border-amber-300 font-extrabold" : "bg-indigo-100 text-indigo-950 border-indigo-300 font-extrabold")
+                  isSuperAdminRoute
+                    ? "bg-amber-100 text-amber-950 border-amber-300 font-extrabold"
+                    : isOfficerRoute || isAiCommandRoute || isServiceConfigRoute
+                    ? "bg-indigo-100 text-indigo-950 border-indigo-300 font-extrabold"
                     : "bg-blue-50 text-blue-900 border-blue-200"
                 }`}>
-                  {isAdminPortalPage ? (isSuperAdminRoute ? "SUPERADMIN PORTAL" : "ADMIN PORTAL") : "e-Gov Portal"}
+                  {isSuperAdminRoute
+                    ? "SUPERADMIN PORTAL"
+                    : isOfficerRoute || isAiCommandRoute || isServiceConfigRoute
+                    ? userDepartment
+                      ? `${userDepartment.split(" ")[0].toUpperCase()} PORTAL`
+                      : "OFFICER PORTAL"
+                    : "e-Gov Portal"}
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 font-medium leading-snug mt-0.5">
-                {isAdminPortalPage
-                  ? (isSuperAdminRoute ? "Executive Master Governance Portal" : "Municipal Officer Command Center")
+                {isSuperAdminRoute
+                  ? "Executive Master Governance Portal"
+                  : isOfficerRoute || isAiCommandRoute || isServiceConfigRoute
+                  ? userDepartment
+                    ? `${userDepartment} Command Center`
+                    : "Municipal Department Officer Command Center"
                   : "Public Grievance & SLA Monitoring"}
               </p>
             </div>
@@ -225,10 +243,47 @@ export default function Navbar() {
 
           {/* Desktop Navigation Links */}
           <nav className="hidden lg:flex items-center gap-1 xl:gap-2">
-            {isAdminPortalPage ? (
-              /* =========================================
-                 ADMINISTRATIVE PORTAL LINKS (DEDICATED)
-                 ========================================= */
+            {isSuperAdminRoute ? (
+              /* SuperAdmin Portal Navigation */
+              <>
+                <Link
+                  to="/superadmin"
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-extrabold transition ${
+                    isActive("/superadmin")
+                      ? "bg-amber-500 text-slate-950 shadow-xs"
+                      : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                  }`}
+                >
+                  <Crown className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                  Master Console
+                </Link>
+
+                <Link
+                  to="/service-config"
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition ${
+                    isActive("/service-config")
+                      ? "bg-blue-50 text-blue-900 border border-blue-200"
+                      : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                  }`}
+                >
+                  <Settings className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                  Service Rules
+                </Link>
+
+                <Link
+                  to="/closed-complaints"
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition ${
+                    isActive("/closed-complaints")
+                      ? "bg-blue-50 text-blue-900 border border-blue-200"
+                      : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                  }`}
+                >
+                  <Archive className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                  Archives
+                </Link>
+              </>
+            ) : isOfficerRoute || isAiCommandRoute || isServiceConfigRoute ? (
+              /* Department Officer / Admin Portal Navigation (NO SUPERADMIN LINK) */
               <>
                 <Link
                   to="/admin"
@@ -277,20 +332,6 @@ export default function Navbar() {
                   <Archive className="w-3.5 h-3.5 text-slate-600 shrink-0" />
                   Archives
                 </Link>
-
-                {userRole === "superadmin" && (
-                  <Link
-                    to="/superadmin"
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-extrabold transition ${
-                      isActive("/superadmin")
-                        ? "bg-amber-500 text-slate-950 shadow-md"
-                        : "bg-slate-900 text-amber-300 hover:bg-slate-950 border border-slate-800"
-                    }`}
-                  >
-                    <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                    SuperAdmin Master
-                  </Link>
-                )}
               </>
             ) : isAuthPage ? (
               <Link
@@ -372,16 +413,35 @@ export default function Navbar() {
               /* Administrative Portal Action Bar */
               isUserAdminRole ? (
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-extrabold text-indigo-950 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5">
-                    <ShieldCheck className="w-3.5 h-3.5 text-indigo-700" /> Officer Session Active
-                  </span>
+                  {isSuperAdminRoute ? (
+                    <>
+                      <span className="text-[11px] font-extrabold text-amber-950 bg-amber-50 border border-amber-300 px-3 py-1.5 rounded-lg flex items-center gap-1.5 max-w-xs truncate">
+                        <Crown className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span>Chief Commissioner Master Session</span>
+                      </span>
 
-                  <button
-                    onClick={handleAdminLogout}
-                    className="flex items-center gap-1.5 bg-slate-900 hover:bg-red-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg shadow-xs transition cursor-pointer"
-                  >
-                    <LogOut className="w-3.5 h-3.5 text-amber-400" /> End Admin Session
-                  </button>
+                      <button
+                        onClick={handleAdminLogout}
+                        className="flex items-center gap-1.5 bg-slate-900 hover:bg-red-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg shadow-xs transition cursor-pointer"
+                      >
+                        <LogOut className="w-3.5 h-3.5 text-amber-400" /> End Master Session
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-[11px] font-extrabold text-indigo-950 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5 max-w-xs truncate">
+                        <ShieldCheck className="w-3.5 h-3.5 text-indigo-700 shrink-0" />
+                        <span>{userDepartment || "Department Officer Active"}</span>
+                      </span>
+
+                      <button
+                        onClick={handleAdminLogout}
+                        className="flex items-center gap-1.5 bg-slate-900 hover:bg-red-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg shadow-xs transition cursor-pointer"
+                      >
+                        <LogOut className="w-3.5 h-3.5 text-amber-400" /> End Admin Session
+                      </button>
+                    </>
+                  )}
                 </div>
               ) : isOfficerAuthPage || isSuperAdminAuthPage ? (
                 null
@@ -476,15 +536,6 @@ export default function Navbar() {
               >
                 <Archive className="w-4 h-4 text-slate-600" /> Archives
               </Link>
-              {userRole === "superadmin" && (
-                <Link
-                  to="/superadmin"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-slate-800 hover:bg-white"
-                >
-                  <Crown className="w-4 h-4 text-amber-500" /> SuperAdmin Master
-                </Link>
-              )}
             </>
           ) : isAuthPage ? (
             <Link

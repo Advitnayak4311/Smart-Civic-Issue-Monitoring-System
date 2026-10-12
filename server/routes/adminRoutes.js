@@ -10,9 +10,17 @@ import {
   getDepartmentPerformance,
   clearAllComplaints,
   testEmailApi,
+  officerLogin,
+  getDepartmentDirectory,
 } from "../controllers/adminController.js";
 
 const router = express.Router();
+
+// Department Officer Login
+router.post("/officer-login", officerLogin);
+
+// Department Directory & Issue Summaries
+router.get("/department-directory", getDepartmentDirectory);
 
 // Test live SMTP email dispatch
 router.post("/test-email", testEmailApi);

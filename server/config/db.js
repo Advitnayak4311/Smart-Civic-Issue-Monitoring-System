@@ -1,8 +1,10 @@
 import mongoose from "mongoose";
 import { MongoMemoryServer } from "mongodb-memory-server";
+import bcrypt from "bcryptjs";
 import ServiceConfig from "../models/ServiceConfig.js";
 import Department from "../models/Department.js";
 import Complaint from "../models/Complaint.js";
+import User from "../models/User.js";
 
 const seedInitialServiceRules = async () => {
   try {
@@ -36,7 +38,36 @@ const seedInitialServiceRules = async () => {
       console.log("Municipal departments seeded successfully ✅");
     }
 
-    // 2. Seed Master Service Rules matching frontend intake categories
+    // 2. Seed Department Nodal Officers
+    const salt = await bcrypt.genSalt(10);
+    const defaultOfficerPassword = await bcrypt.hash("password123", salt);
+
+    const officers = [
+      { fullName: "Er. Rajesh Verma", email: "roads.officer@municipal.gov.in", password: defaultOfficerPassword, role: "officer", department: "Roads & Highway Dept", designation: "Executive Nodal Officer (Roads)", phone: "9480683101" },
+      { fullName: "Er. Priya Sharma", email: "water.officer@municipal.gov.in", password: defaultOfficerPassword, role: "officer", department: "Water Supply & Sewerage Board", designation: "Chief Water Engineer", phone: "9480683102" },
+      { fullName: "Dr. Anand Patil", email: "sanitation.officer@municipal.gov.in", password: defaultOfficerPassword, role: "officer", department: "Sanitation & Waste Management", designation: "Zonal Sanitation Officer", phone: "9480683103" },
+      { fullName: "Er. Suresh Rao", email: "electrical.officer@municipal.gov.in", password: defaultOfficerPassword, role: "officer", department: "Electrical & Energy Dept", designation: "Superintending Electrical Engineer", phone: "9480683104" },
+      { fullName: "Er. Kavita Nair", email: "drainage.officer@municipal.gov.in", password: defaultOfficerPassword, role: "officer", department: "Drainage & Stormwater Division", designation: "Executive Drainage Engineer", phone: "9480683105" },
+      { fullName: "Dr. Meena Iyer", email: "health.officer@municipal.gov.in", password: defaultOfficerPassword, role: "officer", department: "Public Health & Hygiene Dept", designation: "Chief Municipal Health Inspector", phone: "9480683106" },
+      { fullName: "Er. Vikram Deshmukh", email: "pwd.officer@municipal.gov.in", password: defaultOfficerPassword, role: "officer", department: "Public Works Dept (PWD)", designation: "Executive Engineer - PWD", phone: "9480683107" },
+      { fullName: "Insp. Arun Kumar", email: "traffic.officer@municipal.gov.in", password: defaultOfficerPassword, role: "officer", department: "Traffic Infrastructure & Signals Division", designation: "Traffic Infrastructure Inspector", phone: "9480683108" },
+      { fullName: "Mr. Sanjay Kulkarni", email: "parks.officer@municipal.gov.in", password: defaultOfficerPassword, role: "officer", department: "Parks & Recreation Department", designation: "Parks & Horticulture Superintendent", phone: "9480683109" },
+      { fullName: "Mr. Amit Roy", email: "forestry.officer@municipal.gov.in", password: defaultOfficerPassword, role: "officer", department: "Emergency Forestry & Pruning Squad", designation: "Emergency Squad In-Charge", phone: "9480683110" },
+      { fullName: "Ar. Neha Gupta", email: "townplanning.officer@municipal.gov.in", password: defaultOfficerPassword, role: "officer", department: "Town Planning & Building Control", designation: "Town Planning Officer", phone: "9480683111" },
+      { fullName: "Dr. Deepak Joshi", email: "veterinary.officer@municipal.gov.in", password: defaultOfficerPassword, role: "officer", department: "Animal Husbandry & Veterinary Services", designation: "Senior Veterinary Surgeon", phone: "9480683112" },
+      { fullName: "Municipal Nodal Officer", email: "officer@municipal.gov.in", password: defaultOfficerPassword, role: "officer", department: "Roads & Highway Dept", designation: "Central Nodal Officer", phone: "9480683000" },
+    ];
+
+    for (const off of officers) {
+      await User.updateOne(
+        { email: off.email },
+        { $set: off },
+        { upsert: true }
+      );
+    }
+    console.log("Department Nodal Officers seeded successfully ✅");
+
+    // 3. Seed Master Service Rules matching frontend intake categories
     console.log("Seeding comprehensive production service configuration rules...");
     const rules = [
       // Roads & Infrastructure

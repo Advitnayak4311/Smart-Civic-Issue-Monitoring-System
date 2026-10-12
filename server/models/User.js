@@ -16,6 +16,9 @@ const userSchema = new mongoose.Schema({
     badges: [{type: String}],
     contributionCount: {type: Number, default: 0},
     resolvedCount: {type: Number, default: 0},
+    role: {type: String, enum: ["citizen", "officer", "admin", "superadmin"], default: "citizen"},
+    department: {type: String, default: ""},
+    designation: {type: String, default: "Municipal Officer"},
 }, {timestamps: true});
 
 const User = mongoose.model("User", userSchema);

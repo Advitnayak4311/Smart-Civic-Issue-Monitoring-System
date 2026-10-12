@@ -144,13 +144,6 @@ export default function Footer() {
                       &rsaquo; Service Configuration Rules
                     </Link>
                   </li>
-                  {userRole === "superadmin" && (
-                    <li>
-                      <Link to="/superadmin" className="hover:text-white transition flex items-center gap-1.5 text-amber-400 font-bold">
-                        &rsaquo; SuperAdmin Master Control
-                      </Link>
-                    </li>
-                  )}
                 </>
               ) : (
                 <>
